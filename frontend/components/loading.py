@@ -2,7 +2,7 @@ import os
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
-def run_cleanup_with_loading(console: Console, paths, clean_func, format_func):
+def run_cleanup_with_loading(console: Console, paths, clean_func, format_func, dry_run=False):
     """Executes the cleanup process with a unified loading screen."""
     console.clear()
     console.print("\n" * (console.height // 3))
@@ -27,13 +27,14 @@ def run_cleanup_with_loading(console: Console, paths, clean_func, format_func):
         transient=True
     ) as progress:
         
-        main_task = progress.add_task("Limpando arquivos desnecessários...", total=max(1, total_files))
-        
+        label = "Analisando arquivos (dry-run)..." if dry_run else "Limpando arquivos desnecessários..."
+        main_task = progress.add_task(label, total=max(1, total_files))
+
         for name, path in paths.items():
             def update_progress(n):
                 progress.update(main_task, advance=n)
-                
-            bytes_freed = clean_func(path, update_progress)
+
+            bytes_freed = clean_func(path, update_progress, dry_run=dry_run)
             results.append((name, format_func(bytes_freed)))
             total_freed += bytes_freed
             

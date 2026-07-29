@@ -7,8 +7,7 @@ A high-performance Windows utility to clean temporary files, featuring a sleek A
 - **/backend**: Core logic for file deletion, size calculation, and privilege checking.
 - **/frontend**: CLI implementation using the `rich` library for an elegant user experience.
 - **/docs**: General documentation and architectural overview.
-  - [Funcionamento Detalhado (Arquitetura)](file:///d:/GitHub/Limpeza_TEMP/docs/funcionamento.md): Explicação completa da arquitetura, fluxo e funcionamento dos módulos.
-
+  - [Funcionamento Detalhado (Arquitetura)](funcionamento.md): Explicação completa da arquitetura, fluxo e funcionamento dos módulos.
 
 ## How to Use
 
