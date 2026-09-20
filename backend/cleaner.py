@@ -1,5 +1,4 @@
 import os
-import shutil
 from pathlib import Path
 
 def get_dir_size(path):
@@ -26,14 +25,37 @@ def format_size(size_bytes):
         i += 1
     return f"{size_bytes:.2f} {size_name[i]}"
 
-def clean_directory(directory_path, progress_callback=None):
+def _remove_and_measure(path):
+    """Recursively deletes a directory tree, summing freed bytes in a single pass."""
+    total = 0
+    try:
+        for entry in os.scandir(path):
+            try:
+                if entry.is_file() or entry.is_symlink():
+                    total += entry.stat().st_size
+                    os.remove(entry.path)
+                elif entry.is_dir():
+                    total += _remove_and_measure(entry.path)
+            except (PermissionError, OSError, FileNotFoundError):
+                pass
+    except (PermissionError, FileNotFoundError):
+        pass
+    try:
+        os.rmdir(path)
+    except OSError:
+        pass
+    return total
+
+
+def clean_directory(directory_path, progress_callback=None, dry_run=False):
     """
     Safely deletes all files and subdirectories within a directory.
-    Ignores files that are currently in use.
+    Ignores files that are currently in use. When dry_run is True, only
+    measures what would be freed without deleting anything.
     """
     path = Path(directory_path)
     bytes_freed = 0
-    
+
     if not path.exists():
         return 0
 
@@ -43,16 +65,18 @@ def clean_directory(directory_path, progress_callback=None):
             try:
                 if entry.is_file() or entry.is_symlink():
                     file_size = entry.stat().st_size
-                    os.remove(entry.path)
+                    if not dry_run:
+                        os.remove(entry.path)
                     bytes_freed += file_size
                 elif entry.is_dir():
-                    dir_size = get_dir_size(entry.path)
-                    shutil.rmtree(entry.path)
-                    bytes_freed += dir_size
+                    if dry_run:
+                        bytes_freed += get_dir_size(entry.path)
+                    else:
+                        bytes_freed += _remove_and_measure(entry.path)
             except (PermissionError, OSError, FileNotFoundError):
                 # Silently skip files/folders in use or already gone
                 pass
-            
+
             if progress_callback:
                 progress_callback(1)
     except (PermissionError, OSError):

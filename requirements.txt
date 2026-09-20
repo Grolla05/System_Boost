@@ -1,2 +1,2 @@
-rich
-pyinstaller
+rich~=15.0
+pyinstaller~=6.20
