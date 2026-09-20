@@ -16,11 +16,11 @@ custom_theme = Theme({
 
 console = Console(theme=custom_theme)
 
-def show_welcome():
-    display_welcome_screen(console)
+def show_welcome(skip_wait=False):
+    display_welcome_screen(console, skip_wait=skip_wait)
 
-def show_loading(paths, clean_func, format_func):
-    return run_cleanup_with_loading(console, paths, clean_func, format_func)
+def show_loading(paths, clean_func, format_func, dry_run=False):
+    return run_cleanup_with_loading(console, paths, clean_func, format_func, dry_run=dry_run)
 
-def show_completion(total_formatted):
-    display_completion_screen(console, total_formatted)
+def show_completion(total_formatted, dry_run=False, close_terminal=True, skip_wait=False):
+    display_completion_screen(console, total_formatted, dry_run=dry_run, close_terminal=close_terminal, skip_wait=skip_wait)
