@@ -1,18 +1,24 @@
 # WinCleaner - Minimalist System Purge
 
-A high-performance Windows utility to clean temporary files, featuring a sleek Apple-inspired CLI.
+A high-performance Windows utility to clean temporary files and apply reversible system tweaks, featuring a sleek Apple-inspired CLI.
 
 ## Project Structure
 
-- **/backend**: Core logic for file deletion, size calculation, and privilege checking.
+- **/backend**: Core logic for file deletion, size calculation, privilege checking, and reversible tweaks (`backend/tweaks/`).
 - **/frontend**: CLI implementation using the `rich` library for an elegant user experience.
 - **/docs**: General documentation and architectural overview.
-  - [Funcionamento Detalhado (Arquitetura)](funcionamento.md): Explicação completa da arquitetura, fluxo e funcionamento dos módulos.
+  - [Funcionamento Detalhado (Arquitetura)](funcionamento.md): Explicação completa da arquitetura, fluxo e funcionamento dos módulos, incluindo o subsistema de ajustes reversíveis.
 
 ## How to Use
 
-1. **Direct Execution:** Run `python main.py` to start the cleanup.
-2. **Administrator Mode:** Run the terminal as Administrator to enable cleaning of `C:\Windows\Temp` and `C:\Windows\Prefetch`.
+1. **Guided flow (default):** Run `python main.py` with no arguments to walk through welcome → level menu (Leve/Mediana/Alta/Extrema) → confirmation → execution → completion.
+2. **Direct cleanup:** Run `python main.py clean` for the old direct behavior (no menu).
+3. **Administrator Mode:** Run the terminal as Administrator to enable cleaning of `C:\Windows\Temp` and `C:\Windows\Prefetch`, and to apply admin-required tweaks.
+4. **Reversible tweaks (granular):**
+   - `python main.py list` — shows all available tweaks and their current/applied state.
+   - `python main.py apply <tweak_id>` — applies a tweak, saving its previous value.
+   - `python main.py undo <tweak_id>` — restores a single tweak's previous value.
+   - `python main.py undo --all` — restores every applied tweak.
 
 ## Building the Executable
 
