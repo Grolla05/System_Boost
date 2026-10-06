@@ -13,7 +13,7 @@ python main.py
 
 # Build standalone .exe (PyInstaller, one-file, console)
 python build.py
-# output: /dist/WinCleaner.exe
+# output: /dist/System Boost.exe
 ```
 
 ```bash
@@ -59,6 +59,10 @@ The keypress-wait + `WM_CLOSE` terminal-auto-close dance (after a keypress, loca
 `menu` (the new default when `main.py` is run with no arguments) bundles cleanup + tweaks into 4 escalating levels — `leve` → `mediana` → `alta` → `extrema` — defined declaratively in `profiles.LEVELS`. `resolve_clean_paths()` reuses `cleaner.get_temp_paths()` with the same admin-filter shape `cmd_clean` already had; `resolve_tweak_plan()`/`apply_level_tweaks()` reuse `tweaks.manager.apply_tweak()` per id, catching `TweakError` per-tweak so one admin-required tweak being unavailable (not elevated) or already-applied never aborts the rest of the level — it's recorded as skipped/failed and shown on the completion screen, same graceful-degradation spirit as `cmd_clean`'s path filtering. This module is intentionally separate from `backend/tweaks/` (which stays scoped to the tweak abstraction itself) since it's cross-cutting orchestration over both `cleaner` and `tweaks`.
 
 `frontend/components/level_menu.py` reads the level choice via `rich.prompt.IntPrompt` and the run/skip confirmation via `rich.prompt.Confirm` — both stdlib-adjacent (already part of the `rich` dependency, no new installs), and both read from real stdin so they don't share `_terminal.py`'s `msvcrt.getch()` console-only limitation. Note for testing: `IntPrompt`/`Confirm` work fine when stdin is piped (e.g. `subprocess.run(..., input=b"1\n")`), but `msvcrt.getch()` (used by `show_welcome`/`show_completion`/`show_level_completion` when `skip_wait=False`) reads directly from the console and hangs forever on piped/redirected stdin — any scripted smoke test of the guided flow needs `-y` (which sets `skip_wait=True` throughout) to avoid hanging on those screens.
+
+### `backend/drivers.py` — driver updates
+
+Final step of `menu` and `clean` (opt-out `--no-drivers`; `--dry-run` lists only). PowerShell + `Microsoft.Update.Session` COM API (Windows Update, `Type='Driver'`), JSON out, one driver at a time; `update_all_drivers()` returns `(results, reboot_required)` with the same `(name, True|False|None, note)` tuples as `profiles.apply_level_tweaks`. Admin required, else a single skipped entry. `update_id` is GUID-validated before interpolation into the script. Results reach the user via the optional `driver_summary` param of `show_completion`/`show_level_completion` (those screens `console.clear()`, so printing earlier would be wiped). `show_driver_update` / `format_driver_summary` live in `frontend/cli.py`.
 
 ### `backend/tweaks/` — reversible tweaks subsystem
 

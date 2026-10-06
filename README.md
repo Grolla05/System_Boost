@@ -12,7 +12,7 @@ A high-performance Windows CLI utility that cleans temporary files and applies r
 ## Requirements
 
 - Windows 10/11
-- Python 3.11+ (or run the prebuilt `WinCleaner.exe` from `/dist`)
+- Python 3.11+ (or run the prebuilt `System Boost.exe` from `/dist`)
 
 ## Installation
 
@@ -30,6 +30,15 @@ python main.py menu -y  # same flow, skips confirmations (scripted/unattended us
 ```
 
 Pick a level and the tool shows exactly what it's about to clean and which tweaks it'll apply *before* touching anything. Tweaks that need Administrator are shown as "pulados" (skipped) rather than failing the whole run when the terminal isn't elevated.
+
+### Driver updates
+
+`menu` and `clean` finish with a driver step: the tool asks Windows Update for pending driver updates and installs them one by one (Administrator required; otherwise the step is skipped). `--dry-run` only lists them; pass `--no-drivers` to skip the step. A reboot may be needed afterwards, and creating a restore point first is recommended.
+
+```bash
+python main.py clean --dry-run -y   # list pending drivers, install nothing
+python main.py menu --no-drivers    # guided flow without the driver step
+```
 
 ### Clean temp files directly
 
@@ -59,12 +68,12 @@ Tweak state is stored locally at `%LOCALAPPDATA%\WinCleaner\tweaks_state.json` �
 ```bash
 pip install -r requirements.txt
 python build.py
-# output: dist/WinCleaner.exe
+# output: dist/System Boost.exe
 ```
 
 ## Project structure
 
-- **`backend/`** — core logic, no UI: `cleaner.py`, `privileges.py`, `tweaks/` (the reversible-tweaks subsystem), `profiles.py` (the 4 guided-flow levels).
+- **`backend/`** — core logic, no UI: `cleaner.py`, `privileges.py`, `tweaks/` (the reversible-tweaks subsystem), `profiles.py` (the 4 guided-flow levels), `drivers.py` (Windows Update driver scan/install).
 - **`frontend/`** — `rich`-based console UI: `cli.py` + `components/`.
 - **`tests/`** — pytest suite (`pytest -v`).
 - **`docs/funcionamento.md`** — full architecture walkthrough in Portuguese, with diagrams.

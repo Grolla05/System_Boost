@@ -2,12 +2,12 @@ from rich import box
 from rich.console import Console
 from rich.panel import Panel
 
-from ._terminal import wait_for_exit_or_back
+from ._terminal import clear_screen, wait_for_exit_or_back
 
 
-def display_level_completion(console: Console, level_label, total_formatted, tweak_results, close_terminal=True, skip_wait=False):
+def display_level_completion(console: Console, level_label, total_formatted, tweak_results, close_terminal=True, skip_wait=False, driver_summary=None):
     """Shows the combined cleanup + tweaks summary; returns 'back' or 'exit' based on the user's choice."""
-    console.clear()
+    clear_screen(console)
     console.print("\n" * (console.height // 3))
 
     applied = [r for r in tweak_results if r[1] is True]
@@ -23,6 +23,8 @@ def display_level_completion(console: Console, level_label, total_formatted, twe
         body += f"\n[warning]{len(skipped)} pulado(s) (requer Administrador)[/warning]"
     if failed:
         body += f"\n[danger]{len(failed)} falharam[/danger]"
+    if driver_summary:
+        body += f"\n{driver_summary}"
 
     panel = Panel(body, box=box.ROUNDED, border_style="success", expand=False, padding=(1, 4))
     console.print(panel, justify="center")

@@ -24,6 +24,18 @@ def _read_single_key():
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 
+def clear_screen(console):
+    """Erases the visible screen. rich's console.clear() only homes the cursor on some Windows consoles."""
+    console.clear()
+    if not console.is_terminal:
+        return
+    if os.name == 'nt':
+        os.system("cls")
+    else:
+        console.file.write("\x1b[2J\x1b[3J\x1b[H")
+        console.file.flush()
+
+
 def _close_terminal():
     """Best-effort force-close of the hosting console window (Windows only)."""
     if os.name != 'nt':

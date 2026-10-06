@@ -1,5 +1,62 @@
 # CHANGES.md
 
+## 2026-10-06 — Fix: tela não era limpa ao avançar entre telas
+
+Motivação: no `System Boost.exe`, após "pressione qualquer tecla" na tela de boas-vindas, o menu de níveis era desenhado no topo mas o painel de boas-vindas e o texto "pressione qualquer tecla" continuavam visíveis abaixo. Causa: `console.clear()` do Rich apenas move o cursor ao topo neste console do Windows, sem apagar o buffer visível.
+
+### 1. `frontend/components/_terminal.py`
+
+- Nova `clear_screen(console)`: chama `console.clear()` (mantém o estado do Rich) e, se `console.is_terminal`, apaga de fato a tela — `os.system("cls")` no Windows, sequência ANSI `ESC[2J ESC[3J ESC[H` em POSIX. Com saída redirecionada (pipe, `-y` em script) não faz nada além do `console.clear()`.
+
+### 2. Componentes
+
+- `welcome.py`, `loading.py`, `level_menu.py`, `completion.py`, `level_completion.py`: `console.clear()` substituído por `clear_screen(console)`.
+
+### 3. Testes
+
+- `tests/test_terminal.py` (novo): `cls` executado em terminal Windows; não executado com saída redirecionada; ANSI escrito em terminal POSIX.
+- Suíte completa: 108 passed.
+
+### 4. Observações
+
+- Validar visualmente rebuildando (`python build.py`) e abrindo `dist\System Boost.exe` num console real; o `.exe` anterior ainda tem o bug.
+- Este commit também inclui as alterações pendentes da etapa de drivers (entrada de 2026-10-04 abaixo), ainda não commitadas.
+
+## 2026-10-04 — Atualização automática de drivers (etapa final de `menu` e `clean`)
+
+Baseado no plano aprovado em `C:\Users\fegro\.claude\plans\claude-agora-como-que-generic-riddle.md`. Motivação: o usuário pediu que, ao executar os modos, o programa varra os dispositivos do computador e atualize os drivers um a um. Decisões confirmadas em plan mode: fonte = **Windows Update** (oficial, assinado, sem download de sites de terceiros); gatilho = etapa final de `menu` e `clean` (os modos "run and done"), com opt-out `--no-drivers`; `list`/`apply`/`undo` ficam de fora porque rodam em sequência no terminal e uma busca lenta no Windows Update os atrapalharia.
+
+### 1. Novo módulo `backend/drivers.py`
+
+Funções puras, sem UI, mesma convenção de subprocess do repo (`argv` em lista, `capture_output=True, check=False`, decodificação UTF-8 feita pelo próprio módulo, nunca regex em texto localizado — a saída é JSON).
+
+- `scan_drivers()`: PowerShell (`-NoProfile -NonInteractive -ExecutionPolicy Bypass`) cria `Microsoft.Update.Session` e busca `IsInstalled=0 and Type='Driver'`; emite JSON (`title`, `update_id`, `manufacturer`, `model`, `size`). `[Console]::OutputEncoding` é forçado para UTF-8; BOM é tolerado (`utf-8-sig`). Objeto único vira lista; saída vazia vira `[]`. Timeout de 600 s.
+- `install_driver(update_id)`: baixa e instala **um** update (UpdateColl de 1 item). Retorna `(ok, reboot_required, nota)`; `ResultCode == 2` = sucesso. O `update_id` é validado como GUID antes de ser interpolado no script (impede injeção de comando). Timeout de 1800 s.
+- `update_all_drivers(progress_callback=None, on_scan=None, dry_run=False)`: retorna `(results, reboot_required)`, com `results` = lista de `(titulo, status, nota)` (`True` atualizado, `False` falhou, `None` pulado/dry-run), mesmo formato de `profiles.apply_level_tweaks`. Sem admin → um único item pulado "requer administrador" (degradação graciosa, igual aos tweaks). Erro no scan → um item `False`. Falha em um driver nunca aborta os demais. `dry_run` só lista, não instala.
+- `DriverError`: levantada em returncode ≠ 0, timeout, JSON inválido, GUID inválido ou falha ao iniciar o PowerShell.
+
+### 2. Frontend
+
+- `frontend/components/driver_progress.py`: `run_driver_update_with_progress` (spinner + barra do Rich, `transient=True`, total definido via `on_scan` após a varredura) e `format_driver_summary` (bloco de markup com contagem de atualizados, pulados/falhas por driver e aviso de reinício).
+- `frontend/cli.py`: novos `show_driver_update` e `format_driver_summary`; `show_completion` e `show_level_completion` ganham o parâmetro opcional `driver_summary`.
+- `completion.py` / `level_completion.py`: anexam o resumo ao painel final. Motivo: ambas as telas fazem `console.clear()`, então imprimir o resultado antes as apagaria.
+
+### 3. `main.py`
+
+- `--no-drivers` em `menu` e `clean`.
+- `_run_driver_step(args, dry_run)`: retorna `None` com `--no-drivers`, senão o resumo formatado. Em `cmd_menu` roda depois dos tweaks; em `cmd_clean` roda antes de `show_completion` (que chama `sys.exit(0)`) e repassa `--dry-run`.
+
+### 4. Testes
+
+- `tests/test_drivers.py` (novo): parse de JSON (lista, objeto único, vazio, BOM), erros (returncode, JSON inválido, timeout), argv/timeout, GUID inválido sem executar, sem admin, dry-run sem instalar, uma falha não aborta o resto, callbacks, flag de reboot, nada encontrado, erro de scan.
+- `tests/test_main.py`: `--no-drivers` default `False` e aceito em `menu`/`clean`.
+- Suíte completa: 105 passed.
+
+### 5. Observações
+
+- Instalar driver é difícil de reverter e pode exigir reinício; recomenda-se criar um ponto de restauração antes (fora do escopo desta entrega).
+- A instalação real não foi exercitada nos testes (tudo mockado); validar manualmente com `python main.py clean --dry-run -y` em terminal administrador.
+
 ## 2026-09-23 (2) — Fluxo guiado por menu (`python main.py`), 4 níveis de otimização
 
 Baseado no plano de ação aprovado em `C:\Users\fegro\.claude\plans\pasted-content-id-ebf4-quero-evoluir-replicated-fairy.md` (segunda rodada de planejamento na mesma sessão — plano anterior era o sistema de ajustes reversíveis, já implementado e documentado na entrada abaixo). Motivação: rodar `python main.py` sem argumentos ainda caía direto na limpeza (`clean`), a mesma navegação de antes do sistema de tweaks existir. O usuário pediu um fluxo guiado de 4 telas: boas-vindas → menu de níveis (leve/mediana/alta/extrema) → configuração/execução → conclusão — evolução interativa da ideia original de "perfil 1 clique" (item 2 do roadmap), expandida de um único pacote pré-definido para 4 níveis escaláveis.

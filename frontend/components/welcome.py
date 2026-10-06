@@ -3,9 +3,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich import box
 
+from ._terminal import clear_screen
+
 def display_welcome_screen(console: Console, skip_wait: bool = False):
     """Displays the minimalist welcome screen."""
-    console.clear()
+    clear_screen(console)
     # Vertical centering simulation
     console.print("\n" * (console.height // 3))
 
