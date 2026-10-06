@@ -168,3 +168,6 @@ ehthumbs_vista.db
 Desktop.ini
 desktop.ini
 $RECYCLE.BIN/
+
+# Runtime diagnostic logs
+logs/

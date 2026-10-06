@@ -2,9 +2,11 @@ import os
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
+from ._terminal import clear_screen
+
 def run_cleanup_with_loading(console: Console, paths, clean_func, format_func, dry_run=False):
     """Executes the cleanup process with a unified loading screen."""
-    console.clear()
+    clear_screen(console)
     console.print("\n" * (console.height // 3))
     
     total_files = 0
