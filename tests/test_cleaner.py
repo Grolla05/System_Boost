@@ -117,3 +117,55 @@ def test_get_temp_paths_filters_nonexistent(monkeypatch, tmp_path):
     paths = get_temp_paths()
 
     assert paths == {"User Temp": str(existing)}
+
+
+# --- PyInstaller onefile: never delete our own extraction dir ----------------
+
+def _frozen_tree(tmp_path, monkeypatch):
+    import sys
+    mei = tmp_path / "_MEI123"
+    mei.mkdir()
+    (mei / "base_library.zip").write_bytes(b"x" * 100)
+    other = tmp_path / "outro"
+    other.mkdir()
+    (other / "arquivo.tmp").write_bytes(b"y" * 10)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(mei), raising=False)
+    return mei, other
+
+
+def test_clean_directory_keeps_own_meipass(tmp_path, monkeypatch):
+    mei, other = _frozen_tree(tmp_path, monkeypatch)
+
+    freed = clean_directory(tmp_path)
+
+    assert (mei / "base_library.zip").exists()
+    assert not other.exists()
+    assert freed == 10
+
+
+def test_clean_directory_dry_run_ignores_own_meipass(tmp_path, monkeypatch):
+    mei, other = _frozen_tree(tmp_path, monkeypatch)
+
+    assert clean_directory(tmp_path, dry_run=True) == 10
+
+
+def test_clean_directory_not_frozen_still_removes_mei_dirs(tmp_path, monkeypatch):
+    import sys
+    mei = tmp_path / "_MEI123"
+    mei.mkdir()
+    (mei / "f").write_bytes(b"z")
+    monkeypatch.delattr(sys, "frozen", raising=False)
+
+    clean_directory(tmp_path)
+
+    assert not mei.exists()
+
+
+def test_clean_directory_progress_counts_protected_entry(tmp_path, monkeypatch):
+    _frozen_tree(tmp_path, monkeypatch)
+    ticks = []
+
+    clean_directory(tmp_path, progress_callback=ticks.append)
+
+    assert len(ticks) == 2

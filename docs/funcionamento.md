@@ -10,13 +10,23 @@ O projeto segue uma arquitetura modular, dividida claramente entre a lógica de 
 
 ```mermaid
 graph TD
-    A[main.py: Entrypoint] --> B[backend/privileges.py: Checagem Admin]
+    A[main.py: Entrypoint / subcomandos] --> B[backend/privileges.py: Checagem Admin]
     A --> C[frontend/cli.py: Interface Central]
+    A --> H[backend/tweaks/manager.py: Ajustes Reversíveis]
+    A --> L[backend/profiles.py: Níveis do fluxo guiado]
     C --> D[components/welcome.py: Tela Inicial]
     C --> E[components/loading.py: Progresso da Limpeza]
     C --> F[components/completion.py: Tela de Sucesso e Fechamento]
+    C --> I[components/tweak_list.py e tweak_result.py]
+    C --> M[components/level_menu.py e level_completion.py]
     E --> G[backend/cleaner.py: Lógica de Exclusão]
+    H --> J[backend/tweaks/catalog.py: 7 ajustes]
+    H --> K[backend/tweaks/state_store.py: JSON em LOCALAPPDATA]
+    L --> G
+    L --> H
 ```
+
+**`python main.py` sem argumentos agora abre o fluxo guiado (`menu`)** — o comando `clean` continua existindo para o comportamento direto de antes.
 
 ---
 
@@ -113,6 +123,172 @@ sequenceDiagram
     end
     Completion->>Main: sys.exit(0)
 ```
+
+---
+
+## 🔄 Ajustes Reversíveis (`backend/tweaks/`)
+
+Subsistema que aplica e desfaz ajustes do Windows (plano de energia, hibernação, efeitos visuais, telemetria, indexação, SysMain, tarefa de compatibilidade), sempre salvando o valor anterior antes de sobrescrever.
+
+### Abstração `Tweak`
+
+Diferente do resto do backend (só funções), aqui é usada uma classe abstrata (`abc.ABC`) porque os 7 ajustes têm mecanismos bem diferentes entre si e precisam de polimorfismo real — uma subclasse que esquecer `undo()` falha na hora de definir a classe, não silenciosamente na hora que o usuário mais precisa que o undo funcione.
+
+```mermaid
+classDiagram
+    class Tweak {
+        <<abstract>>
+        +id
+        +label
+        +requires_admin
+        +get_current_value()
+        +apply()
+        +undo(previous_value)
+    }
+    Tweak <|-- RegistryValueTweak
+    Tweak <|-- ServiceStateTweak
+    Tweak <|-- ScheduledTaskTweak
+    Tweak <|-- PowerPlanTweak
+    Tweak <|-- HibernationTweak
+```
+
+As classes são organizadas por **mecanismo** (como falam com o Windows), não uma por ajuste — `RegistryValueTweak` atende tanto `visual_effects` quanto `telemetry`; `ServiceStateTweak` atende tanto `indexing` (WSearch) quanto `sysmain` (SysMain).
+
+### Os 7 ajustes (`backend/tweaks/catalog.py`)
+
+| id | admin? | leitura (locale-safe) | escrita | valor salvo para undo |
+|---|---|---|---|---|
+| `power_plan` | não | `winreg` `ActivePowerScheme` | `powercfg /setactive` | GUID do plano anterior |
+| `hibernation` | sim | `winreg` `HibernateEnabled` | `powercfg /hibernate off` | 0/1 |
+| `visual_effects` | não | `winreg` (HKCU) `VisualFXSetting` | mesma chave | int ou `null` |
+| `telemetry` | sim | `winreg` `AllowTelemetry` | mesma chave | int ou `null` (undo apaga o valor se estava ausente) |
+| `indexing` | sim | `winreg` `Services\WSearch\Start` | `sc config` + `sc stop` | tipo de start (string) |
+| `sysmain` | sim | `winreg` `Services\SysMain\Start` | `sc config` + `sc stop` | tipo de start (string) |
+| `compat_appraiser` | sim | `schtasks /Query /XML` | `schtasks /Change` | `"Enabled"`/`"Disabled"` |
+
+**Leituras usam `winreg`, não parsing de saída de `.exe`** — a saída de `sc.exe`/`schtasks.exe`/`powercfg.exe` é localizada no idioma do Windows (esta interface é pt-BR, então o risco é real). Escritas continuam usando os `.exe`s porque as flags de linha de comando são fixas, não traduzidas. Um detalhe descoberto durante o desenvolvimento: `schtasks /XML` declara `encoding="UTF-16"` no prólogo do XML, mas os bytes capturados via pipe redirecionado são, na prática, UTF-8 — `scheduled_tasks.py` decodifica como texto (UTF-8) antes de entregar ao `ElementTree`, em vez de deixar o `ET.fromstring` confiar numa declaração que não bate com os bytes reais.
+
+### Persistência de estado (`backend/tweaks/state_store.py`)
+
+Arquivo JSON em `%LOCALAPPDATA%\WinCleaner\tweaks_state.json`, escrita atômica (arquivo temporário + `os.replace`). Um registro por `tweak_id` (não é um log de eventos):
+
+```json
+{
+  "_schema_version": 1,
+  "_next_seq": 2,
+  "tweaks": {
+    "telemetry": {
+      "tweak_id": "telemetry",
+      "applied_at": "2026-09-23T18:05:02-03:00",
+      "previous_value": null,
+      "applied_value": 0,
+      "requires_admin": true,
+      "_seq": 2
+    }
+  }
+}
+```
+
+`previous_value: null` é um valor significativo (a chave/valor não existia antes) — `undo()` **apaga** o valor do registro em vez de escrever `null`. Reaplicar um ajuste já aplicado (sem desfazer antes) é **rejeitado**, nunca sobrescrito — sobrescrever destruiria o valor original verdadeiro. `_seq` é um contador interno usado para ordenar `boost undo --all` do mais recente para o mais antigo, independente de resolução do relógio do sistema.
+
+### Fluxo de `apply` / `undo` (`backend/tweaks/manager.py`)
+
+```mermaid
+sequenceDiagram
+    actor Usuario
+    participant Main as main.py
+    participant Manager as backend/tweaks/manager.py
+    participant Privs as backend/privileges.py
+    participant Tweak as Tweak (concreto)
+    participant State as state_store.py
+
+    Usuario->>Main: boost apply telemetry
+    Main->>Manager: apply_tweak("telemetry")
+    Manager->>Manager: catalog.get_tweak("telemetry")
+    Manager->>Privs: is_admin() [se requires_admin]
+    Privs-->>Manager: True/False
+    alt não elevado e requer admin
+        Manager-->>Main: TweakError (mensagem clara)
+    else já aplicado anteriormente
+        Manager-->>Main: TweakError ("já está aplicado")
+    else pode prosseguir
+        Manager->>Tweak: get_current_value()
+        Tweak-->>Manager: previous_value
+        Manager->>Tweak: apply()
+        Tweak-->>Manager: applied_value
+        Manager->>State: save_applied(id, previous_value, applied_value, ...)
+        Manager-->>Main: applied_value
+    end
+
+    Usuario->>Main: boost undo telemetry
+    Main->>Manager: undo_tweak("telemetry")
+    Manager->>State: get_applied("telemetry")
+    State-->>Manager: record (ou None)
+    alt sem registro
+        Manager-->>Main: TweakError ("nada para desfazer")
+    else registro encontrado
+        Manager->>Tweak: undo(record.previous_value)
+        Manager->>State: clear_applied("telemetry")
+        Manager-->>Main: previous_value
+    end
+```
+
+**Admin: falha clara, nunca auto-elevação via UAC.** Se um ajuste exige admin e o terminal não está elevado, `manager.py` levanta `TweakError` com mensagem pedindo para reabrir como Administrador — não tenta relançar o processo elevado. Isso mantém `--yes`/uso automatizado viável e evita um prompt de elevação surpresa, coerente com o princípio de "sem login/conta/telemetria própria" do projeto.
+
+`boost list`/`boost apply <id>`/`boost undo <id>|--all` são os subcomandos novos em `main.py` (via `argparse.add_subparsers()`); `python main.py --dry-run -y` sem palavra-chave de subcomando continua funcionando como antes (implica `clean`).
+
+---
+
+## 🧭 Fluxo Guiado (`menu`) — comportamento padrão
+
+Quando `python main.py` é executado sem argumentos, o subcomando `menu` é implícito e apresenta um fluxo guiado por 4 telas:
+
+```mermaid
+sequenceDiagram
+    actor Usuario
+    participant Main as main.py (cmd_menu)
+    participant CLI as frontend/cli.py
+    participant Profiles as backend/profiles.py
+
+    Main->>CLI: show_welcome()
+    CLI->>Usuario: 1. Tela de boas-vindas (aguarda tecla)
+    Main->>CLI: show_level_menu()
+    CLI->>Usuario: 2. Tabela com os 4 níveis, pede número (1-4)
+    Usuario-->>CLI: escolhe o nível
+    Main->>Profiles: resolve_clean_paths(level_id) / resolve_tweak_plan(level_id)
+    Profiles-->>Main: pastas a limpar, ajustes aplicáveis/pulados
+    Main->>CLI: show_level_summary(...)
+    CLI->>Usuario: 3. Resumo do que será feito, pede confirmação (S/n)
+    alt usuário recusa
+        Usuario-->>Main: não
+        Main-->>Usuario: sai sem alterar nada
+    else usuário confirma
+        Usuario-->>CLI: sim
+        Main->>CLI: show_loading(clean_paths, ...) [reaproveitado de cmd_clean]
+        Main->>Profiles: apply_level_tweaks(level_id)
+        Profiles-->>Main: resultados por ajuste (aplicado/pulado/falhou)
+        Main->>CLI: show_level_completion(...)
+        CLI->>Usuario: 4. Tela de conclusão (bytes liberados + resumo dos ajustes)
+        Usuario-->>CLI: Enter (sai) ou ESC (volta ao passo 2)
+    end
+```
+
+Na tela de conclusão (passo 4), **Enter** (ou qualquer tecla além de ESC) encerra o programa — fechando o terminal, igual ao `clean` — e **ESC** volta direto para o menu de níveis (passo 2), sem repetir a tela de boas-vindas, permitindo escolher outro nível na mesma sessão.
+
+### Os 4 níveis (`backend/profiles.py`)
+
+| Nível | Pastas limpas | Ajustes aplicados |
+|---|---|---|
+| Leve | User Temp | `visual_effects` |
+| Mediana | + System Temp | + `power_plan` |
+| Alta | + Prefetch | + `hibernation`, `indexing` |
+| Extrema | (mesmas de Alta) | + `telemetry`, `sysmain`, `compat_appraiser` |
+
+Cada nível é só uma lista declarativa de pastas + ids de ajustes em `profiles.LEVELS` — nenhuma lógica nova de limpeza ou de ajuste é criada; `resolve_clean_paths()` reaproveita `cleaner.get_temp_paths()` e o mesmo filtro por admin que `cmd_clean` já tinha, e `apply_level_tweaks()` reaproveita `tweaks.manager.apply_tweak()` ajuste por ajuste.
+
+**Degradação graciosa, igual ao `clean`**: se o terminal não está elevado, ajustes que exigem admin (e pastas que exigem admin) são automaticamente pulados — nunca travam a execução do nível inteiro. A tela de resumo (passo 3) já mostra separadamente o que vai rodar e o que vai ser pulado por falta de admin, antes de qualquer coisa ser alterada; a tela de conclusão (passo 4) reporta quantos ajustes foram aplicados, pulados e (se algum já estava aplicado de uma execução anterior) quantos falharam.
+
+A tela de conclusão do `menu` reaproveita o mesmo mecanismo de "aguardar tecla + fechar terminal" (`WM_CLOSE`) que o `clean` já usa — foi extraído para `frontend/components/_terminal.py` para não duplicar essa lógica. `list`/`apply`/`undo` continuam sem essa cerimônia, já que são pensados para rodar em sequência num terminal já aberto.
 
 ---
 
