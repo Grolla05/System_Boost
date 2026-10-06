@@ -36,3 +36,33 @@ def test_clear_screen_writes_ansi_on_posix_terminal(monkeypatch):
     _terminal.clear_screen(console)
 
     assert "\x1b[2J" in console.file.getvalue()
+
+
+def test_flush_input_drains_pending_keys_on_windows(monkeypatch):
+    import sys
+    import types
+
+    pending = [True, True, False]
+    drained = []
+    fake_msvcrt = types.SimpleNamespace(kbhit=lambda: pending.pop(0), getch=lambda: drained.append(1) or b"x")
+    monkeypatch.setitem(sys.modules, "msvcrt", fake_msvcrt)
+    monkeypatch.setattr(_terminal.os, "name", "nt")
+
+    _terminal.flush_input()
+
+    assert len(drained) == 2
+
+
+def test_read_single_key_flushes_before_waiting(monkeypatch):
+    import sys
+    import types
+
+    order = []
+    fake_msvcrt = types.SimpleNamespace(kbhit=lambda: False, getch=lambda: order.append("getch") or b"x")
+    monkeypatch.setitem(sys.modules, "msvcrt", fake_msvcrt)
+    monkeypatch.setattr(_terminal.os, "name", "nt")
+    monkeypatch.setattr(_terminal, "flush_input", lambda: order.append("flush"))
+
+    _terminal._read_single_key()
+
+    assert order == ["flush", "getch"]

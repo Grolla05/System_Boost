@@ -11,6 +11,7 @@ def display_level_completion(console: Console, level_label, total_formatted, twe
     console.print("\n" * (console.height // 3))
 
     applied = [r for r in tweak_results if r[1] is True]
+    already = [r for r in tweak_results if r[1] == "already"]
     skipped = [r for r in tweak_results if r[1] is None]
     failed = [r for r in tweak_results if r[1] is False]
 
@@ -19,10 +20,15 @@ def display_level_completion(console: Console, level_label, total_formatted, twe
         f"[white]{total_formatted} liberados do seu sistema[/white]\n"
         f"[white]{len(applied)} ajuste(s) aplicado(s)[/white]"
     )
+    if already:
+        body += f"\n[white]{len(already)} já aplicado(s) anteriormente[/white]"
     if skipped:
-        body += f"\n[warning]{len(skipped)} pulado(s) (requer Administrador)[/warning]"
+        reasons = ", ".join(sorted({r[2] for r in skipped if r[2]})) or "pulado"
+        body += f"\n[warning]{len(skipped)} pulado(s) ({reasons})[/warning]"
     if failed:
         body += f"\n[danger]{len(failed)} falharam[/danger]"
+        for tweak_id, _, note in failed:
+            body += f"\n[danger]  - {tweak_id}: {note}[/danger]"
     if driver_summary:
         body += f"\n{driver_summary}"
 

@@ -2,7 +2,10 @@ import json
 import re
 import subprocess
 
+from backend.logger import get_logger
 from backend.privileges import is_admin
+
+log = get_logger("drivers")
 
 SCAN_TIMEOUT = 600
 INSTALL_TIMEOUT = 1800
@@ -43,18 +46,23 @@ class DriverError(Exception):
 
 
 def _run_powershell(script, timeout):
+    log.debug("powershell: executando (timeout=%ss), script=%.200s", timeout, script)
     try:
         result = subprocess.run(
             ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
              "-Command", script],
-            capture_output=True, check=False, timeout=timeout,
+            capture_output=True, check=False, timeout=timeout, stdin=subprocess.DEVNULL,
         )
     except subprocess.TimeoutExpired:
+        log.error("powershell: timeout após %ss", timeout)
         raise DriverError("tempo esgotado aguardando o Windows Update")
     except OSError as exc:
+        log.error("powershell: não executou: %s", exc)
         raise DriverError(f"não foi possível executar o PowerShell: {exc}")
+    log.debug("powershell: returncode=%s", result.returncode)
     if result.returncode != 0:
         detail = (result.stderr or b"").decode("utf-8", errors="replace").strip()
+        log.error("powershell: stderr=%s", detail[:500])
         raise DriverError(f"PowerShell retornou {result.returncode}: {detail}"[:300])
     return (result.stdout or b"").decode("utf-8-sig", errors="replace").strip()
 
@@ -97,13 +105,17 @@ def update_all_drivers(progress_callback=None, on_scan=None, dry_run=False):
     where status is True (updated), False (failed) or None (skipped / dry-run).
     One failing driver never aborts the rest.
     """
+    log.info("drivers: iniciando (dry_run=%s)", dry_run)
     if not is_admin():
+        log.warning("drivers: pulado, requer administrador")
         return [("Drivers", None, "requer administrador")], False
 
     try:
         found = scan_drivers()
     except DriverError as exc:
+        log.error("drivers: falha no scan: %s", exc)
         return [("Drivers", False, str(exc))], False
+    log.info("drivers: %d atualização(ões) pendente(s)", len(found))
 
     if on_scan:
         on_scan(len(found))
@@ -120,8 +132,10 @@ def update_all_drivers(progress_callback=None, on_scan=None, dry_run=False):
         try:
             ok, reboot, note = install_driver(item.get("update_id"))
         except DriverError as exc:
+            log.error("drivers: '%s' falhou: %s", title, exc)
             results.append((title, False, str(exc)))
             continue
+        log.info("drivers: '%s' ok=%s reboot=%s nota=%s", title, ok, reboot, note)
         reboot_required = reboot_required or reboot
         results.append((title, ok, note))
     return results, reboot_required

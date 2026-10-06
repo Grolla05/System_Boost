@@ -6,6 +6,10 @@ class TweakError(Exception):
     """Raised when a tweak can't be looked up, read, applied, or undone."""
 
 
+class TweakAlreadyApplied(TweakError):
+    """Raised when apply is requested for a tweak whose applied state is already recorded."""
+
+
 class Tweak(ABC):
     """Common interface every reversible Windows tweak must implement."""
 

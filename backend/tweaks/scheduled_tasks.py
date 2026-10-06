@@ -2,7 +2,11 @@
 import subprocess
 import xml.etree.ElementTree as ET
 
+from backend.logger import get_logger
+
 from .base import Tweak, TweakError
+
+log = get_logger("tweaks.scheduled_tasks")
 
 _NAMESPACE = "{http://schemas.microsoft.com/windows/2004/02/mit/task}"
 
@@ -24,7 +28,9 @@ class ScheduledTaskTweak(Tweak):
             ["schtasks", "/Query", "/TN", self.task_path, "/XML", "ONE"],
             capture_output=True, check=False,
         )
+        log.debug("schtasks /Query %s: returncode=%s", self.task_path, result.returncode)
         if result.returncode != 0:
+            log.error("schtasks /Query: stderr=%r", result.stderr)
             raise TweakError(f"Tarefa agendada '{self.task_path}' não encontrada.")
         try:
             # schtasks declares encoding="UTF-16" in the XML prolog, but the bytes
@@ -58,5 +64,7 @@ class ScheduledTaskTweak(Tweak):
             ["schtasks", "/Change", "/TN", self.task_path, flag],
             capture_output=True, check=False,
         )
+        log.debug("schtasks /Change %s %s: returncode=%s", self.task_path, flag, result.returncode)
         if result.returncode != 0:
+            log.error("schtasks /Change: stdout=%r stderr=%r", result.stdout, result.stderr)
             raise TweakError(f"Falha ao alterar tarefa '{self.task_path}'.")

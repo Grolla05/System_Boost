@@ -1,7 +1,7 @@
 import pytest
 
 from backend.tweaks import manager
-from backend.tweaks.base import Tweak, TweakError
+from backend.tweaks.base import Tweak, TweakAlreadyApplied, TweakError
 
 
 class StubTweak(Tweak):
@@ -158,3 +158,16 @@ def test_undo_all_replays_most_recent_first_and_survives_one_failure(monkeypatch
     assert manager.state_store.get_applied("t2", path=state_path) is not None
     assert manager.state_store.get_applied("t1", path=state_path) is None
     assert manager.state_store.get_applied("t3", path=state_path) is None
+
+
+def test_reapply_raises_tweak_already_applied_subclass(monkeypatch, tmp_path):
+    state_path = tmp_path / "state.json"
+    _patch_catalog(monkeypatch, {"t1": StubTweak("t1")})
+    monkeypatch.setattr(manager, "is_admin", lambda: True)
+    manager.apply_tweak("t1", state_path=state_path)
+
+    with pytest.raises(TweakAlreadyApplied) as exc_info:
+        manager.apply_tweak("t1", state_path=state_path)
+
+    assert "boost undo" not in str(exc_info.value)
+    assert "undo t1" in str(exc_info.value)

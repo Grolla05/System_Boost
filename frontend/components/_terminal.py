@@ -5,8 +5,23 @@ import sys
 ESC_KEYS = (b"\x1b", "\x1b")
 
 
+def flush_input():
+    """Discards keystrokes typed while the program was busy, so a stale key can't skip a 'press a key' wait."""
+    try:
+        if os.name == 'nt':
+            import msvcrt
+            while msvcrt.kbhit():
+                msvcrt.getch()
+        else:
+            import termios
+            termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+    except Exception:
+        pass
+
+
 def _read_single_key():
     """Reads and returns one raw keypress (bytes on Windows, 1-char str on POSIX)."""
+    flush_input()
     if os.name == 'nt':
         import msvcrt
         return msvcrt.getch()

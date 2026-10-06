@@ -5,7 +5,11 @@ try:
 except ImportError:  # pragma: no cover - non-Windows dev machine
     winreg = None
 
+from backend.logger import get_logger
+
 from .base import Tweak, TweakError
+
+log = get_logger("tweaks.services")
 
 _INT_TO_START_TYPE = {0: "boot", 1: "system", 2: "auto", 3: "demand", 4: "disabled"}
 _STARTABLE_TYPES = ("boot", "system", "auto")
@@ -41,7 +45,8 @@ class ServiceStateTweak(Tweak):
     def apply(self):
         """Sets the service's start type to target_start_type and stops it."""
         self._set_start_type(self.target_start_type)
-        subprocess.run(["sc", "stop", self.service_name], capture_output=True, check=False)
+        stop = subprocess.run(["sc", "stop", self.service_name], capture_output=True, check=False)
+        log.debug("sc stop %s: returncode=%s", self.service_name, stop.returncode)
         return self.target_start_type
 
     def undo(self, previous_value):
@@ -57,5 +62,7 @@ class ServiceStateTweak(Tweak):
             ["sc", "config", self.service_name, "start=", start_type],
             capture_output=True, check=False,
         )
+        log.debug("sc config %s start=%s: returncode=%s", self.service_name, start_type, result.returncode)
         if result.returncode != 0:
+            log.error("sc config %s: stdout=%r stderr=%r", self.service_name, result.stdout, result.stderr)
             raise TweakError(f"Falha ao configurar serviço '{self.service_name}' (start={start_type}).")

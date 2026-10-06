@@ -1,9 +1,8 @@
-import os
 from rich.console import Console
 from rich.panel import Panel
 from rich import box
 
-from ._terminal import clear_screen
+from ._terminal import _read_single_key, clear_screen
 
 def display_welcome_screen(console: Console, skip_wait: bool = False):
     """Displays the minimalist welcome screen."""
@@ -19,16 +18,4 @@ def display_welcome_screen(console: Console, skip_wait: bool = False):
 
     console.print("\n\n[dim]pressione qualquer tecla para prosseguir[/dim]", justify="center")
 
-    # Wait for key press
-    if os.name == 'nt':
-        import msvcrt
-        msvcrt.getch()
-    else:
-        import sys, tty, termios
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(sys.stdin.fileno())
-            sys.stdin.read(1)
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    _read_single_key()

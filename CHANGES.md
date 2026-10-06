@@ -1,5 +1,88 @@
 # CHANGES.md
 
+## 2026-10-06 (4) — Fix: "1 falharam" no nível Leve (ajuste já aplicado) + logs passo a passo
+
+Motivação: após o fix do `_MEIPASS`, o nível Leve ainda mostrava `0 ajuste(s) aplicado(s) / 1 falharam`. Checkup: `%LOCALAPPDATA%\WinCleaner	weaks_state.json` já continha `visual_effects` (aplicado em 2026-09-27) e o registro (`VisualFXSetting = 2`) conferia. `manager.apply_tweak` levanta `TweakError("já está aplicado…")` e `profiles.apply_level_tweaks` contava isso como **falha**. Não era erro de Windows: era "já aplicado" tratado como erro. O mesmo ocorreria nos níveis Mediana/Alta/Extrema (os 7 ajustes já estão no state file). Além disso a tela só mostrava a contagem, sem motivo, e não havia nenhum log.
+
+### 1. `backend/tweaks/base.py` / `__init__.py`
+- Nova `TweakAlreadyApplied(TweakError)` (exportada em `backend.tweaks`). `cmd_apply` (CLI) continua tratando como erro, pois é subclasse.
+
+### 2. `backend/tweaks/manager.py`
+- `apply_tweak` levanta `TweakAlreadyApplied`; mensagem corrigida para `python main.py undo <id>` (antes citava `boost undo`, inexistente no exe).
+- Logs de apply/undo: início, admin, valor atual, valor aplicado, conclusão/motivo.
+
+### 3. `backend/profiles.py`
+- `apply_level_tweaks` captura `TweakAlreadyApplied` → status `"already"` (nota "já aplicado"), fora da contagem de falhas. Status possíveis: `True`, `"already"`, `False`, `None`.
+- Logs do plano do nível (pastas, aplicáveis, pulados) e de cada ajuste.
+
+### 4. `frontend/components/level_completion.py`
+- Mostra "N já aplicado(s) anteriormente"; falhas listam `id: motivo`; rótulo de pulados usa a nota real (antes fixo "requer Administrador").
+
+### 5. Logs — novo `backend/logger.py`
+- `setup_logging()` idempotente, `RotatingFileHandler` (1 MB × 5, UTF-8, DEBUG), nada no console; falha de escrita → silenciosamente sem log. Cabeçalho de sessão (python, OS, admin, frozen, pid, argv).
+- Pasta: `<projeto>/logs/system_boost.log` (exe em `dist/` → pai de `dist/`; exe fora de `dist/` → pasta do exe). `logs/` adicionado ao `.gitignore`.
+- Instrumentados: `main.py` (comando, nível, etapas limpeza/ajustes/drivers, `log.exception` em erro não tratado), `cleaner.py` (por pasta, entradas ignoradas em DEBUG — antes silenciosas), `drivers.py` (PowerShell: timeout/returncode/stderr, resultado por driver), `tweaks/{registry_value,services,power_plan,hibernation,scheduled_tasks}.py` (comando e returncode; stdout/stderr em falha).
+
+### 6. Testes
+- Novos: `tests/test_logger.py`, `tests/test_level_completion.py`; ampliados `tests/test_profiles.py` e `tests/test_tweaks/test_manager.py`.
+- Suíte completa: 133 passed.
+
+### 7. Verificação manual
+- Executado `apply_level_tweaks` nos 4 níveis (shell sem admin): `visual_effects`/`power_plan` → `already`; ajustes admin → pulados; log gerado com todos os passos. Os ajustes admin não foram exercitados nesta verificação (exigem shell elevado) — ao rodar o `.exe` como Administrador, o log mostrará o resultado real de cada um.
+- Para validar: `python build.py`, rodar `dist\System Boost.exe` como Administrador e ler `logs\system_boost.log`.
+
+## 2026-10-06 (3) — Fix: limpeza apagava a pasta de extração do próprio `.exe`
+
+Motivação: com o fix anterior (traceback/erros visíveis), o `.exe` mostrou `Drivers: erro inesperado: [Errno 2] No such file or directory: '...\Temp\_MEI000057042\base_library.zip'` e `1 falharam` nos ajustes. Causa raiz: `System Boost.exe` é PyInstaller one-file e se extrai em `%TEMP%\_MEIxxxxxx` (`sys._MEIPASS`), de onde o Python carrega `base_library.zip` e módulos importados sob demanda. `clean_directory()` esvaziava `%TEMP%` inteiro — inclusive essa pasta — antes dos ajustes/drivers; qualquer import posterior falhava. Também explica o fechamento abrupto original. Só acontece no `.exe` (em `python main.py` não existe `_MEIPASS`).
+
+### 1. `backend/cleaner.py`
+
+- `_protected_paths()`: quando `sys.frozen` e `sys._MEIPASS` existem, devolve `{normcase(realpath(_MEIPASS))}`; vazio caso contrário.
+- `clean_directory`, `_remove_and_measure` e `get_dir_size` recebem `protected` e pulam qualquer diretório protegido (também em `dry_run`, para não contar bytes que não serão apagados). A barra de progresso continua avançando por entrada de topo.
+- Outras pastas `_MEI*` (de execuções antigas) continuam sendo limpas; as em uso o Windows já impede de apagar.
+
+### 2. Testes (`tests/test_cleaner.py`)
+
+- frozen: `_MEIPASS` preservada e demais itens apagados, bytes só dos apagados; `dry_run` ignora a protegida; não-frozen mantém o comportamento antigo; callback de progresso conta a entrada protegida.
+- Suíte completa: 117 passed.
+
+### 3. Observações
+
+- Validar rebuildando (`python build.py`) e rodando `dist\System Boost.exe` como Administrador, nível Leve: esperado 1 ajuste aplicado, 0 falhas e linha de drivers sem erro de `_MEI`.
+
+## 2026-10-06 (2) — Fix: janela fechava sem mostrar a tela de conclusão
+
+Motivação: ao terminar `menu`/`clean`, o `.exe` fechava direto, sem o painel "CONCLUÍDO". Causa não reproduzida em ambiente real; duas hipóteses tratadas juntas: (1) tecla já no buffer — `msvcrt.getch()` retorna na hora se o usuário digitou algo durante a limpeza/atualização de drivers (longa), e `_close_terminal()` fecha a janela em ms; o `powershell.exe` filho também herdava o stdin do console; (2) exceção não tratada na etapa final, cujo traceback sumia junto com a janela.
+
+### 1. `frontend/components/_terminal.py`
+
+- Nova `flush_input()`: descarta teclas pendentes (`msvcrt.kbhit()/getch()` no Windows, `termios.tcflush` em POSIX; erros ignorados).
+- `_read_single_key()` chama `flush_input()` antes de esperar a tecla (afeta completion, level_completion e welcome).
+
+### 2. `frontend/components/welcome.py`
+
+- Espera de tecla passa a usar `_read_single_key()` (remove a cópia duplicada de `msvcrt`/`termios`), herdando o flush.
+
+### 3. `backend/drivers.py`
+
+- `_run_powershell`: `stdin=subprocess.DEVNULL` — o filho não toca mais na entrada do console.
+
+### 4. `main.py`
+
+- `_run_driver_step`: `try/except Exception` → devolve linha de erro no resumo; a tela de conclusão sempre aparece.
+- Novo `run_guarded()` (usado em `__main__`): em exceção não tratada imprime o traceback, aguarda tecla (`_wait_key_after_crash`) e sai com código 1. `KeyboardInterrupt` segue como antes.
+
+### 5. Testes
+
+- `tests/test_terminal.py`: `flush_input` drena o buffer; `_read_single_key` faz flush antes do `getch`.
+- `tests/test_drivers.py`: `subprocess.run` recebe `stdin=DEVNULL`.
+- `tests/test_main.py`: `_run_driver_step` não propaga erro; `run_guarded` imprime traceback, espera tecla e sai com 1.
+- Suíte completa: 113 passed.
+
+### 6. Observações
+
+- Validar rebuildando (`python build.py`) e abrindo o `.exe` por duplo clique (admin e não-admin), digitando teclas durante a execução. Se ainda fechar, o traceback agora fica visível para diagnóstico.
+
 ## 2026-10-06 — Fix: tela não era limpa ao avançar entre telas
 
 Motivação: no `System Boost.exe`, após "pressione qualquer tecla" na tela de boas-vindas, o menu de níveis era desenhado no topo mas o painel de boas-vindas e o texto "pressione qualquer tecla" continuavam visíveis abaixo. Causa: `console.clear()` do Rich apenas move o cursor ao topo neste console do Windows, sem apagar o buffer visível.
