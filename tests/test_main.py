@@ -21,6 +21,16 @@ def test_bare_flags_imply_clean_for_back_compat():
     assert args.yes is True
 
 
+def test_no_drivers_flag_defaults_false():
+    assert parse_args(["menu"]).no_drivers is False
+    assert parse_args(["clean"]).no_drivers is False
+
+
+def test_no_drivers_flag_on_menu_and_clean():
+    assert parse_args(["menu", "--no-drivers"]).no_drivers is True
+    assert parse_args(["clean", "--no-drivers"]).no_drivers is True
+
+
 def test_list_subcommand():
     args = parse_args(["list"])
     assert args.command == "list"

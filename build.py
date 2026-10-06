@@ -18,7 +18,7 @@ def build():
         "pyinstaller",
         "--onefile",
         "--console",
-        "--name=WinCleaner",
+        "--name=System Boost",
         "--clean",
         "--noconfirm",
         "--distpath=./dist",

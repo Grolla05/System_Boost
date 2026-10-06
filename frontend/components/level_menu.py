@@ -6,10 +6,12 @@ from rich.table import Table
 from backend.profiles import LEVEL_ORDER, LEVELS
 from backend.tweaks import catalog as tweaks_catalog
 
+from ._terminal import clear_screen
+
 
 def display_level_menu(console: Console):
     """Shows the 4 optimization levels and prompts for a numbered choice, returning the chosen level id."""
-    console.clear()
+    clear_screen(console)
     table = Table(title="Escolha o nível de otimização")
     table.add_column("#", justify="center", style="accent")
     table.add_column("Nível")

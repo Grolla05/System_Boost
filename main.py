@@ -5,7 +5,10 @@ from backend.privileges import is_admin
 from backend.cleaner import get_temp_paths, clean_directory, format_size
 from backend.tweaks import list_status, apply_tweak, undo_tweak, undo_all, TweakError
 from backend import profiles
+from backend.drivers import update_all_drivers
 from frontend.cli import (
+    show_driver_update,
+    format_driver_summary,
     console,
     show_welcome,
     show_loading,
@@ -35,12 +38,14 @@ def parse_args(argv=None):
 
     menu_parser = subparsers.add_parser("menu", help="Fluxo guiado: escolha um nível de otimização")
     menu_parser.add_argument("-y", "--yes", action="store_true", help="Pula confirmações (uso automatizado)")
+    menu_parser.add_argument("--no-drivers", action="store_true", help="Não atualiza drivers ao final")
 
     clean_parser = subparsers.add_parser("clean", help="Limpa arquivos temporários do Windows")
     clean_parser.add_argument("-n", "--dry-run", action="store_true", help="Simula a limpeza sem apagar nada")
     clean_parser.add_argument("--paths", nargs="+", choices=PATH_CHOICES, help="Restringe a limpeza a pastas específicas")
     clean_parser.add_argument("-y", "--yes", action="store_true", help="Pula telas de confirmação (uso automatizado)")
     clean_parser.add_argument("--no-close", action="store_true", help="Não fecha o terminal ao final")
+    clean_parser.add_argument("--no-drivers", action="store_true", help="Não atualiza drivers ao final")
 
     subparsers.add_parser("list", help="Lista os ajustes reversíveis disponíveis e seu estado atual")
 
@@ -55,6 +60,14 @@ def parse_args(argv=None):
     if args.command == "undo" and not args.all and not args.tweak_id:
         parser.error("undo requer um tweak_id ou --all")
     return args
+
+
+def _run_driver_step(args, dry_run=False):
+    """Final step of menu/clean: scan devices and update drivers via Windows Update."""
+    if args.no_drivers:
+        return None
+    results, reboot_required = show_driver_update(update_all_drivers, dry_run=dry_run)
+    return format_driver_summary(results, reboot_required)
 
 
 def cmd_menu(args):
@@ -78,11 +91,12 @@ def cmd_menu(args):
             clean_paths, clean_directory, format_size, dry_run=False
         )
         tweak_results = profiles.apply_level_tweaks(level_id)
+        driver_summary = _run_driver_step(args)
 
         level_label = profiles.LEVELS[level_id]["label"]
         outcome = show_level_completion(
             level_label, total_formatted, tweak_results,
-            close_terminal=not args.yes, skip_wait=args.yes,
+            close_terminal=not args.yes, skip_wait=args.yes, driver_summary=driver_summary,
         )
         if outcome != "back":
             return
@@ -113,8 +127,13 @@ def cmd_clean(args):
         paths_to_clean, clean_directory, format_size, dry_run=args.dry_run
     )
 
+    driver_summary = _run_driver_step(args, dry_run=args.dry_run)
+
     close_terminal = not (args.no_close or args.dry_run or args.yes)
-    show_completion(total_formatted, dry_run=args.dry_run, close_terminal=close_terminal, skip_wait=args.yes)
+    show_completion(
+        total_formatted, dry_run=args.dry_run, close_terminal=close_terminal,
+        skip_wait=args.yes, driver_summary=driver_summary,
+    )
 
 
 def cmd_list(args):
