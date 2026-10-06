@@ -1,5 +1,13 @@
 # CHANGES.md
 
+## 2026-10-06 (5) — Fix: CI quebrada (`requirements-dev.txt` inexistente)
+
+Motivação: checks `CI / test (push)` e `CI / test (pull_request)` do PR #2 falhavam em ~15s com `ERROR: Could not open requirements file: [Errno 2] No such file or directory: 'requirements-dev.txt'`. Causa: o commit 2917e5e removeu `requirements-dev.txt` (consolidando `pytest~=8.4` em `requirements.txt`) mas `.github/workflows/ci.yml` continuou instalando o arquivo antigo; os testes nem chegavam a rodar.
+
+- `.github/workflows/ci.yml`: `pip install -r requirements-dev.txt` → `pip install -r requirements.txt`. (CI passa a instalar também `pyinstaller`; inofensivo.)
+- Nenhuma outra referência a `requirements-dev.txt` no repositório.
+- Verificação local: `pytest -v` verde.
+
 ## 2026-10-06 (4) — Fix: "1 falharam" no nível Leve (ajuste já aplicado) + logs passo a passo
 
 Motivação: após o fix do `_MEIPASS`, o nível Leve ainda mostrava `0 ajuste(s) aplicado(s) / 1 falharam`. Checkup: `%LOCALAPPDATA%\WinCleaner	weaks_state.json` já continha `visual_effects` (aplicado em 2026-09-27) e o registro (`VisualFXSetting = 2`) conferia. `manager.apply_tweak` levanta `TweakError("já está aplicado…")` e `profiles.apply_level_tweaks` contava isso como **falha**. Não era erro de Windows: era "já aplicado" tratado como erro. O mesmo ocorreria nos níveis Mediana/Alta/Extrema (os 7 ajustes já estão no state file). Além disso a tela só mostrava a contagem, sem motivo, e não havia nenhum log.
