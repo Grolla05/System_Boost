@@ -1,7 +1,7 @@
 import pytest
 
 from backend import profiles
-from backend.tweaks.base import TweakError
+from backend.tweaks.base import TweakAlreadyApplied, TweakError
 
 
 class _FakeTweak:
@@ -142,3 +142,48 @@ def test_apply_level_tweaks_includes_skipped_without_calling_apply(monkeypatch, 
 
     assert by_id["hibernation"][0] is None
     assert "hibernation" not in calls
+
+
+def test_apply_level_tweaks_already_applied_is_not_a_failure(monkeypatch, tmp_path):
+    _patch_catalog(monkeypatch)
+    monkeypatch.setattr(profiles, "is_admin", lambda: True)
+
+    def fake_apply(tid, state_path=None):
+        if tid == "visual_effects":
+            raise TweakAlreadyApplied("já aplicado")
+
+    monkeypatch.setattr(profiles.tweaks_manager, "apply_tweak", fake_apply)
+
+    results = profiles.apply_level_tweaks("leve", state_path=tmp_path / "state.json")
+
+    assert results == [("visual_effects", "already", "já aplicado")]
+
+
+def test_apply_level_tweaks_real_failure_still_false_alongside_already(monkeypatch, tmp_path):
+    _patch_catalog(monkeypatch)
+    monkeypatch.setattr(profiles, "is_admin", lambda: True)
+
+    def fake_apply(tid, state_path=None):
+        if tid == "visual_effects":
+            raise TweakAlreadyApplied("já aplicado")
+        if tid == "power_plan":
+            raise TweakError("falha real")
+
+    monkeypatch.setattr(profiles.tweaks_manager, "apply_tweak", fake_apply)
+
+    results = profiles.apply_level_tweaks("mediana", state_path=tmp_path / "state.json")
+    by_id = {tid: status for tid, status, _ in results}
+
+    assert by_id == {"visual_effects": "already", "power_plan": False}
+
+
+def test_apply_level_tweaks_logs_each_step(monkeypatch, tmp_path, caplog):
+    import logging
+    _patch_catalog(monkeypatch)
+    monkeypatch.setattr(profiles, "is_admin", lambda: True)
+    monkeypatch.setattr(profiles.tweaks_manager, "apply_tweak", lambda tid, state_path=None: None)
+
+    with caplog.at_level(logging.DEBUG, logger="system_boost"):
+        profiles.apply_level_tweaks("leve", state_path=tmp_path / "state.json")
+
+    assert "visual_effects" in caplog.text

@@ -1,14 +1,18 @@
 """Applies and undoes reversible tweaks, coordinating catalog, state, and admin checks."""
+from backend.logger import get_logger
 from backend.privileges import is_admin
 
 from . import catalog
 from . import state_store
-from .base import TweakError
+from .base import TweakAlreadyApplied, TweakError
+
+log = get_logger("tweaks.manager")
 
 
 def _require_admin_if_needed(tweak):
     """Raises TweakError if tweak needs admin rights and the process isn't elevated."""
     if tweak.requires_admin and not is_admin():
+        log.warning("'%s' requer admin e o processo não está elevado", tweak.id)
         raise TweakError(
             f"'{tweak.label}' requer privilégios de administrador. "
             "Reabra o terminal como Administrador e tente novamente."
@@ -17,25 +21,35 @@ def _require_admin_if_needed(tweak):
 
 def apply_tweak(tweak_id, state_path=None):
     """Applies tweak_id after checking admin and saving its current value for undo."""
+    log.info("apply '%s': iniciando", tweak_id)
     tweak = catalog.get_tweak(tweak_id)
     _require_admin_if_needed(tweak)
     if state_store.get_applied(tweak_id, path=state_path) is not None:
-        raise TweakError(f"'{tweak_id}' já está aplicado. Rode `boost undo {tweak_id}` primeiro.")
+        log.info("apply '%s': já consta como aplicado no state file", tweak_id)
+        raise TweakAlreadyApplied(
+            f"'{tweak_id}' já está aplicado. Rode `python main.py undo {tweak_id}` para desfazer."
+        )
     previous_value = tweak.get_current_value()
+    log.debug("apply '%s': valor atual=%r", tweak_id, previous_value)
     applied_value = tweak.apply()
+    log.debug("apply '%s': valor aplicado=%r", tweak_id, applied_value)
     state_store.save_applied(tweak_id, previous_value, applied_value, tweak.requires_admin, path=state_path)
+    log.info("apply '%s': concluído (%r -> %r)", tweak_id, previous_value, applied_value)
     return applied_value
 
 
 def undo_tweak(tweak_id, state_path=None):
     """Undoes a previously applied tweak, restoring its saved previous value."""
+    log.info("undo '%s': iniciando", tweak_id)
     tweak = catalog.get_tweak(tweak_id)
     _require_admin_if_needed(tweak)
     record = state_store.get_applied(tweak_id, path=state_path)
     if record is None:
+        log.info("undo '%s': não aplicado, nada a fazer", tweak_id)
         raise TweakError(f"'{tweak_id}' não está aplicado — nada para desfazer.")
     tweak.undo(record["previous_value"])
     state_store.clear_applied(tweak_id, path=state_path)
+    log.info("undo '%s': concluído (restaurado %r)", tweak_id, record["previous_value"])
     return record["previous_value"]
 
 

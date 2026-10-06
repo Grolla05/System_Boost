@@ -5,7 +5,11 @@ try:
 except ImportError:  # pragma: no cover - non-Windows dev machine
     winreg = None
 
+from backend.logger import get_logger
+
 from .base import Tweak, TweakError
+
+log = get_logger("tweaks.power_plan")
 
 _HIGH_PERFORMANCE_GUID = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
 _POWER_SCHEMES_KEY = "SYSTEM\\CurrentControlSet\\Control\\Power\\User\\PowerSchemes"
@@ -50,5 +54,7 @@ class PowerPlanTweak(Tweak):
     def _set_active(self, guid):
         """Runs powercfg /setactive for the given scheme GUID."""
         result = subprocess.run(["powercfg", "/setactive", guid], capture_output=True, check=False)
+        log.debug("powercfg /setactive %s: returncode=%s", guid, result.returncode)
         if result.returncode != 0:
+            log.error("powercfg /setactive: stdout=%r stderr=%r", result.stdout, result.stderr)
             raise TweakError(f"Falha ao ativar plano de energia '{guid}'.")

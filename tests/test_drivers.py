@@ -208,3 +208,12 @@ def test_update_all_scan_error_becomes_failed_entry(monkeypatch):
     _patch(monkeypatch, FakeRun([_Completed(1, b"", b"boom")]))
     results, _ = drivers.update_all_drivers()
     assert len(results) == 1 and results[0][1] is False
+
+
+def test_powershell_does_not_inherit_console_stdin(monkeypatch):
+    fake = FakeRun([_Completed(0, b"[]")])
+    _patch(monkeypatch, fake)
+
+    drivers.scan_drivers()
+
+    assert fake.calls[0][1]["stdin"] is drivers.subprocess.DEVNULL

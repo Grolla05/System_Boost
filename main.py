@@ -5,6 +5,7 @@ from backend.privileges import is_admin
 from backend.cleaner import get_temp_paths, clean_directory, format_size
 from backend.tweaks import list_status, apply_tweak, undo_tweak, undo_all, TweakError
 from backend import profiles
+from backend.logger import get_logger, setup_logging
 from backend.drivers import update_all_drivers
 from frontend.cli import (
     show_driver_update,
@@ -21,6 +22,8 @@ from frontend.cli import (
     show_level_summary,
     show_level_completion,
 )
+
+log = get_logger("main")
 
 PATH_CHOICES = ("User Temp", "System Temp", "Prefetch")
 COMMANDS = ("menu", "clean", "list", "apply", "undo")
@@ -65,8 +68,14 @@ def parse_args(argv=None):
 def _run_driver_step(args, dry_run=False):
     """Final step of menu/clean: scan devices and update drivers via Windows Update."""
     if args.no_drivers:
+        log.info("etapa drivers: ignorada (--no-drivers)")
         return None
-    results, reboot_required = show_driver_update(update_all_drivers, dry_run=dry_run)
+    log.info("etapa drivers: iniciando")
+    try:
+        results, reboot_required = show_driver_update(update_all_drivers, dry_run=dry_run)
+    except Exception as exc:
+        log.exception("etapa drivers: erro inesperado")
+        return f"[danger]Drivers: erro inesperado: {exc}[/danger]"
     return format_driver_summary(results, reboot_required)
 
 
@@ -79,18 +88,24 @@ def cmd_menu(args):
 
     while True:
         level_id = show_level_menu()
+        log.info("menu: nível escolhido='%s'", level_id)
         clean_paths = profiles.resolve_clean_paths(level_id)
         applicable_ids, skipped_ids = profiles.resolve_tweak_plan(level_id)
 
         if not args.yes:
             proceed = show_level_summary(level_id, clean_paths, applicable_ids, skipped_ids)
             if not proceed:
+                log.info("menu: usuário cancelou na confirmação")
                 return
 
+        log.info("etapa limpeza: iniciando")
         results, total_formatted, total_bytes = show_loading(
             clean_paths, clean_directory, format_size, dry_run=False
         )
+        log.info("etapa limpeza: concluída, total liberado=%s", total_formatted)
+        log.info("etapa ajustes: iniciando")
         tweak_results = profiles.apply_level_tweaks(level_id)
+        log.info("etapa ajustes: resultados=%s", tweak_results)
         driver_summary = _run_driver_step(args)
 
         level_label = profiles.LEVELS[level_id]["label"]
@@ -171,13 +186,32 @@ _DISPATCH = {"menu": cmd_menu, "clean": cmd_clean, "list": cmd_list, "apply": cm
 
 
 def main():
+    setup_logging()
     args = parse_args()
+    log.info("comando='%s' args=%s", args.command, vars(args))
     _DISPATCH[args.command](args)
 
 
-if __name__ == "__main__":
+def _wait_key_after_crash():
+    from frontend.components._terminal import _read_single_key
+    print("\nPressione qualquer tecla para sair...", file=sys.stderr)
+    _read_single_key()
+
+
+def run_guarded():
+    """Runs main(); on an unexpected crash prints the traceback and waits, so a double-clicked window doesn't vanish."""
     try:
         main()
     except KeyboardInterrupt:
         print("\nCleanup cancelled by user.")
         sys.exit(0)
+    except Exception:
+        import traceback
+        log.exception("erro não tratado")
+        traceback.print_exc()
+        _wait_key_after_crash()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    run_guarded()
