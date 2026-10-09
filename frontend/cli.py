@@ -1,3 +1,4 @@
+import sys
 from rich.console import Console
 from rich.theme import Theme
 from .components.welcome import display_welcome_screen
@@ -5,21 +6,49 @@ from .components.loading import run_cleanup_with_loading
 from .components.completion import display_completion_screen
 from .components.tweak_list import display_tweak_list
 from .components.tweak_result import display_tweak_success, display_tweak_error, display_undo_all_results
-from .components.level_menu import display_level_menu, display_level_summary
+from .components.level_menu import display_level_menu, display_level_summary, INFO_CHOICE
 from .components.level_completion import display_level_completion
 from .components.driver_progress import run_driver_update_with_progress, format_driver_summary
+from .components.machine_info import display_machine_info
 
-# Apple-like theme: Monochromatic with a blue accent
-custom_theme = Theme({
-    "info": "cyan",
-    "warning": "yellow",
-    "danger": "red",
-    "success": "bold green",
-    "accent": "bold blue",
-    "header": "bold white on blue",
-})
+from .audio import set_sound_enabled, is_sound_enabled
+from .palettes import (
+    PALETTES,
+    get_theme,
+    load_palette,
+    save_palette,
+    set_current_palette,
+    get_current_palette_name,
+    cycle_palette as palettes_cycle,
+)
 
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+# Initialize theme from persisted config or default 'dmg'
+_initial_palette = load_palette()
+custom_theme = get_theme(_initial_palette)
 console = Console(theme=custom_theme)
+
+
+def apply_palette(palette_name: str):
+    """Changes active console theme and saves choice."""
+    if palette_name in PALETTES:
+        save_palette(palette_name)
+        console.push_theme(get_theme(palette_name))
+
+
+def cycle_active_palette() -> str:
+    """Cycles to the next palette and updates the console."""
+    next_pal = palettes_cycle()
+    console.push_theme(get_theme(next_pal))
+    return next_pal
 
 def show_welcome(skip_wait=False):
     display_welcome_screen(console, skip_wait=skip_wait)
@@ -44,6 +73,9 @@ def show_tweak_error(message):
 
 def show_undo_all_results(results):
     display_undo_all_results(console, results)
+
+def show_machine_info(info, wait=False):
+    display_machine_info(console, info, wait=wait)
 
 def show_level_menu():
     return display_level_menu(console)

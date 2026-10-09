@@ -1,410 +1,205 @@
-# CHANGES.md
-
-## 2026-10-06 (5) — Fix: CI quebrada (`requirements-dev.txt` inexistente)
-
-Motivação: checks `CI / test (push)` e `CI / test (pull_request)` do PR #2 falhavam em ~15s com `ERROR: Could not open requirements file: [Errno 2] No such file or directory: 'requirements-dev.txt'`. Causa: o commit 2917e5e removeu `requirements-dev.txt` (consolidando `pytest~=8.4` em `requirements.txt`) mas `.github/workflows/ci.yml` continuou instalando o arquivo antigo; os testes nem chegavam a rodar.
-
-- `.github/workflows/ci.yml`: `pip install -r requirements-dev.txt` → `pip install -r requirements.txt`. (CI passa a instalar também `pyinstaller`; inofensivo.)
-- Nenhuma outra referência a `requirements-dev.txt` no repositório.
-- Verificação local: `pytest -v` verde.
-
-## 2026-10-06 (4) — Fix: "1 falharam" no nível Leve (ajuste já aplicado) + logs passo a passo
-
-Motivação: após o fix do `_MEIPASS`, o nível Leve ainda mostrava `0 ajuste(s) aplicado(s) / 1 falharam`. Checkup: `%LOCALAPPDATA%\WinCleaner	weaks_state.json` já continha `visual_effects` (aplicado em 2026-09-27) e o registro (`VisualFXSetting = 2`) conferia. `manager.apply_tweak` levanta `TweakError("já está aplicado…")` e `profiles.apply_level_tweaks` contava isso como **falha**. Não era erro de Windows: era "já aplicado" tratado como erro. O mesmo ocorreria nos níveis Mediana/Alta/Extrema (os 7 ajustes já estão no state file). Além disso a tela só mostrava a contagem, sem motivo, e não havia nenhum log.
-
-### 1. `backend/tweaks/base.py` / `__init__.py`
-- Nova `TweakAlreadyApplied(TweakError)` (exportada em `backend.tweaks`). `cmd_apply` (CLI) continua tratando como erro, pois é subclasse.
-
-### 2. `backend/tweaks/manager.py`
-- `apply_tweak` levanta `TweakAlreadyApplied`; mensagem corrigida para `python main.py undo <id>` (antes citava `boost undo`, inexistente no exe).
-- Logs de apply/undo: início, admin, valor atual, valor aplicado, conclusão/motivo.
-
-### 3. `backend/profiles.py`
-- `apply_level_tweaks` captura `TweakAlreadyApplied` → status `"already"` (nota "já aplicado"), fora da contagem de falhas. Status possíveis: `True`, `"already"`, `False`, `None`.
-- Logs do plano do nível (pastas, aplicáveis, pulados) e de cada ajuste.
-
-### 4. `frontend/components/level_completion.py`
-- Mostra "N já aplicado(s) anteriormente"; falhas listam `id: motivo`; rótulo de pulados usa a nota real (antes fixo "requer Administrador").
-
-### 5. Logs — novo `backend/logger.py`
-- `setup_logging()` idempotente, `RotatingFileHandler` (1 MB × 5, UTF-8, DEBUG), nada no console; falha de escrita → silenciosamente sem log. Cabeçalho de sessão (python, OS, admin, frozen, pid, argv).
-- Pasta: `<projeto>/logs/system_boost.log` (exe em `dist/` → pai de `dist/`; exe fora de `dist/` → pasta do exe). `logs/` adicionado ao `.gitignore`.
-- Instrumentados: `main.py` (comando, nível, etapas limpeza/ajustes/drivers, `log.exception` em erro não tratado), `cleaner.py` (por pasta, entradas ignoradas em DEBUG — antes silenciosas), `drivers.py` (PowerShell: timeout/returncode/stderr, resultado por driver), `tweaks/{registry_value,services,power_plan,hibernation,scheduled_tasks}.py` (comando e returncode; stdout/stderr em falha).
-
-### 6. Testes
-- Novos: `tests/test_logger.py`, `tests/test_level_completion.py`; ampliados `tests/test_profiles.py` e `tests/test_tweaks/test_manager.py`.
-- Suíte completa: 133 passed.
-
-### 7. Verificação manual
-- Executado `apply_level_tweaks` nos 4 níveis (shell sem admin): `visual_effects`/`power_plan` → `already`; ajustes admin → pulados; log gerado com todos os passos. Os ajustes admin não foram exercitados nesta verificação (exigem shell elevado) — ao rodar o `.exe` como Administrador, o log mostrará o resultado real de cada um.
-- Para validar: `python build.py`, rodar `dist\System Boost.exe` como Administrador e ler `logs\system_boost.log`.
-
-## 2026-10-06 (3) — Fix: limpeza apagava a pasta de extração do próprio `.exe`
-
-Motivação: com o fix anterior (traceback/erros visíveis), o `.exe` mostrou `Drivers: erro inesperado: [Errno 2] No such file or directory: '...\Temp\_MEI000057042\base_library.zip'` e `1 falharam` nos ajustes. Causa raiz: `System Boost.exe` é PyInstaller one-file e se extrai em `%TEMP%\_MEIxxxxxx` (`sys._MEIPASS`), de onde o Python carrega `base_library.zip` e módulos importados sob demanda. `clean_directory()` esvaziava `%TEMP%` inteiro — inclusive essa pasta — antes dos ajustes/drivers; qualquer import posterior falhava. Também explica o fechamento abrupto original. Só acontece no `.exe` (em `python main.py` não existe `_MEIPASS`).
-
-### 1. `backend/cleaner.py`
-
-- `_protected_paths()`: quando `sys.frozen` e `sys._MEIPASS` existem, devolve `{normcase(realpath(_MEIPASS))}`; vazio caso contrário.
-- `clean_directory`, `_remove_and_measure` e `get_dir_size` recebem `protected` e pulam qualquer diretório protegido (também em `dry_run`, para não contar bytes que não serão apagados). A barra de progresso continua avançando por entrada de topo.
-- Outras pastas `_MEI*` (de execuções antigas) continuam sendo limpas; as em uso o Windows já impede de apagar.
-
-### 2. Testes (`tests/test_cleaner.py`)
-
-- frozen: `_MEIPASS` preservada e demais itens apagados, bytes só dos apagados; `dry_run` ignora a protegida; não-frozen mantém o comportamento antigo; callback de progresso conta a entrada protegida.
-- Suíte completa: 117 passed.
-
-### 3. Observações
-
-- Validar rebuildando (`python build.py`) e rodando `dist\System Boost.exe` como Administrador, nível Leve: esperado 1 ajuste aplicado, 0 falhas e linha de drivers sem erro de `_MEI`.
-
-## 2026-10-06 (2) — Fix: janela fechava sem mostrar a tela de conclusão
-
-Motivação: ao terminar `menu`/`clean`, o `.exe` fechava direto, sem o painel "CONCLUÍDO". Causa não reproduzida em ambiente real; duas hipóteses tratadas juntas: (1) tecla já no buffer — `msvcrt.getch()` retorna na hora se o usuário digitou algo durante a limpeza/atualização de drivers (longa), e `_close_terminal()` fecha a janela em ms; o `powershell.exe` filho também herdava o stdin do console; (2) exceção não tratada na etapa final, cujo traceback sumia junto com a janela.
-
-### 1. `frontend/components/_terminal.py`
-
-- Nova `flush_input()`: descarta teclas pendentes (`msvcrt.kbhit()/getch()` no Windows, `termios.tcflush` em POSIX; erros ignorados).
-- `_read_single_key()` chama `flush_input()` antes de esperar a tecla (afeta completion, level_completion e welcome).
-
-### 2. `frontend/components/welcome.py`
-
-- Espera de tecla passa a usar `_read_single_key()` (remove a cópia duplicada de `msvcrt`/`termios`), herdando o flush.
-
-### 3. `backend/drivers.py`
-
-- `_run_powershell`: `stdin=subprocess.DEVNULL` — o filho não toca mais na entrada do console.
-
-### 4. `main.py`
-
-- `_run_driver_step`: `try/except Exception` → devolve linha de erro no resumo; a tela de conclusão sempre aparece.
-- Novo `run_guarded()` (usado em `__main__`): em exceção não tratada imprime o traceback, aguarda tecla (`_wait_key_after_crash`) e sai com código 1. `KeyboardInterrupt` segue como antes.
-
-### 5. Testes
-
-- `tests/test_terminal.py`: `flush_input` drena o buffer; `_read_single_key` faz flush antes do `getch`.
-- `tests/test_drivers.py`: `subprocess.run` recebe `stdin=DEVNULL`.
-- `tests/test_main.py`: `_run_driver_step` não propaga erro; `run_guarded` imprime traceback, espera tecla e sai com 1.
-- Suíte completa: 113 passed.
-
-### 6. Observações
-
-- Validar rebuildando (`python build.py`) e abrindo o `.exe` por duplo clique (admin e não-admin), digitando teclas durante a execução. Se ainda fechar, o traceback agora fica visível para diagnóstico.
-
-## 2026-10-06 — Fix: tela não era limpa ao avançar entre telas
-
-Motivação: no `System Boost.exe`, após "pressione qualquer tecla" na tela de boas-vindas, o menu de níveis era desenhado no topo mas o painel de boas-vindas e o texto "pressione qualquer tecla" continuavam visíveis abaixo. Causa: `console.clear()` do Rich apenas move o cursor ao topo neste console do Windows, sem apagar o buffer visível.
-
-### 1. `frontend/components/_terminal.py`
-
-- Nova `clear_screen(console)`: chama `console.clear()` (mantém o estado do Rich) e, se `console.is_terminal`, apaga de fato a tela — `os.system("cls")` no Windows, sequência ANSI `ESC[2J ESC[3J ESC[H` em POSIX. Com saída redirecionada (pipe, `-y` em script) não faz nada além do `console.clear()`.
-
-### 2. Componentes
-
-- `welcome.py`, `loading.py`, `level_menu.py`, `completion.py`, `level_completion.py`: `console.clear()` substituído por `clear_screen(console)`.
-
-### 3. Testes
-
-- `tests/test_terminal.py` (novo): `cls` executado em terminal Windows; não executado com saída redirecionada; ANSI escrito em terminal POSIX.
-- Suíte completa: 108 passed.
-
-### 4. Observações
-
-- Validar visualmente rebuildando (`python build.py`) e abrindo `dist\System Boost.exe` num console real; o `.exe` anterior ainda tem o bug.
-- Este commit também inclui as alterações pendentes da etapa de drivers (entrada de 2026-10-04 abaixo), ainda não commitadas.
-
-## 2026-10-04 — Atualização automática de drivers (etapa final de `menu` e `clean`)
-
-Baseado no plano aprovado em `C:\Users\fegro\.claude\plans\claude-agora-como-que-generic-riddle.md`. Motivação: o usuário pediu que, ao executar os modos, o programa varra os dispositivos do computador e atualize os drivers um a um. Decisões confirmadas em plan mode: fonte = **Windows Update** (oficial, assinado, sem download de sites de terceiros); gatilho = etapa final de `menu` e `clean` (os modos "run and done"), com opt-out `--no-drivers`; `list`/`apply`/`undo` ficam de fora porque rodam em sequência no terminal e uma busca lenta no Windows Update os atrapalharia.
-
-### 1. Novo módulo `backend/drivers.py`
-
-Funções puras, sem UI, mesma convenção de subprocess do repo (`argv` em lista, `capture_output=True, check=False`, decodificação UTF-8 feita pelo próprio módulo, nunca regex em texto localizado — a saída é JSON).
-
-- `scan_drivers()`: PowerShell (`-NoProfile -NonInteractive -ExecutionPolicy Bypass`) cria `Microsoft.Update.Session` e busca `IsInstalled=0 and Type='Driver'`; emite JSON (`title`, `update_id`, `manufacturer`, `model`, `size`). `[Console]::OutputEncoding` é forçado para UTF-8; BOM é tolerado (`utf-8-sig`). Objeto único vira lista; saída vazia vira `[]`. Timeout de 600 s.
-- `install_driver(update_id)`: baixa e instala **um** update (UpdateColl de 1 item). Retorna `(ok, reboot_required, nota)`; `ResultCode == 2` = sucesso. O `update_id` é validado como GUID antes de ser interpolado no script (impede injeção de comando). Timeout de 1800 s.
-- `update_all_drivers(progress_callback=None, on_scan=None, dry_run=False)`: retorna `(results, reboot_required)`, com `results` = lista de `(titulo, status, nota)` (`True` atualizado, `False` falhou, `None` pulado/dry-run), mesmo formato de `profiles.apply_level_tweaks`. Sem admin → um único item pulado "requer administrador" (degradação graciosa, igual aos tweaks). Erro no scan → um item `False`. Falha em um driver nunca aborta os demais. `dry_run` só lista, não instala.
-- `DriverError`: levantada em returncode ≠ 0, timeout, JSON inválido, GUID inválido ou falha ao iniciar o PowerShell.
-
-### 2. Frontend
-
-- `frontend/components/driver_progress.py`: `run_driver_update_with_progress` (spinner + barra do Rich, `transient=True`, total definido via `on_scan` após a varredura) e `format_driver_summary` (bloco de markup com contagem de atualizados, pulados/falhas por driver e aviso de reinício).
-- `frontend/cli.py`: novos `show_driver_update` e `format_driver_summary`; `show_completion` e `show_level_completion` ganham o parâmetro opcional `driver_summary`.
-- `completion.py` / `level_completion.py`: anexam o resumo ao painel final. Motivo: ambas as telas fazem `console.clear()`, então imprimir o resultado antes as apagaria.
-
-### 3. `main.py`
-
-- `--no-drivers` em `menu` e `clean`.
-- `_run_driver_step(args, dry_run)`: retorna `None` com `--no-drivers`, senão o resumo formatado. Em `cmd_menu` roda depois dos tweaks; em `cmd_clean` roda antes de `show_completion` (que chama `sys.exit(0)`) e repassa `--dry-run`.
-
-### 4. Testes
-
-- `tests/test_drivers.py` (novo): parse de JSON (lista, objeto único, vazio, BOM), erros (returncode, JSON inválido, timeout), argv/timeout, GUID inválido sem executar, sem admin, dry-run sem instalar, uma falha não aborta o resto, callbacks, flag de reboot, nada encontrado, erro de scan.
-- `tests/test_main.py`: `--no-drivers` default `False` e aceito em `menu`/`clean`.
-- Suíte completa: 105 passed.
-
-### 5. Observações
-
-- Instalar driver é difícil de reverter e pode exigir reinício; recomenda-se criar um ponto de restauração antes (fora do escopo desta entrega).
-- A instalação real não foi exercitada nos testes (tudo mockado); validar manualmente com `python main.py clean --dry-run -y` em terminal administrador.
-
-## 2026-09-23 (2) — Fluxo guiado por menu (`python main.py`), 4 níveis de otimização
-
-Baseado no plano de ação aprovado em `C:\Users\fegro\.claude\plans\pasted-content-id-ebf4-quero-evoluir-replicated-fairy.md` (segunda rodada de planejamento na mesma sessão — plano anterior era o sistema de ajustes reversíveis, já implementado e documentado na entrada abaixo). Motivação: rodar `python main.py` sem argumentos ainda caía direto na limpeza (`clean`), a mesma navegação de antes do sistema de tweaks existir. O usuário pediu um fluxo guiado de 4 telas: boas-vindas → menu de níveis (leve/mediana/alta/extrema) → configuração/execução → conclusão — evolução interativa da ideia original de "perfil 1 clique" (item 2 do roadmap), expandida de um único pacote pré-definido para 4 níveis escaláveis.
-
-### 1. Novo módulo `backend/profiles.py`
-
-Funções puras (sem classes, igual ao resto do `backend/` fora de `tweaks/`), orquestrando `cleaner` + `tweaks` juntos — por isso vive fora de `backend/tweaks/`, que continua restrito à abstração de ajuste em si.
-
-- `LEVELS`: dict declarativo com os 4 níveis (`leve`, `mediana`, `alta`, `extrema`), cada um com `clean_paths` (quais pastas de temp) e `tweak_ids` (quais dos 7 ajustes).
-- `resolve_clean_paths(level_id)`: reaproveita `cleaner.get_temp_paths()` e o mesmo filtro por status de admin que `cmd_clean` já tinha em `main.py` — nenhuma lógica nova de descoberta de pasta.
-- `resolve_tweak_plan(level_id)`: separa os ajustes do nível em `applicable` (pode aplicar agora) e `skipped` (exige admin e o terminal não está elevado) — checa `tweak.requires_admin` de cada ajuste via `tweaks.catalog.get_tweak(id)`.
-- `apply_level_tweaks(level_id, state_path=None)`: aplica cada ajuste `applicable` via `tweaks.manager.apply_tweak()` (reaproveitado sem alteração), capturando `TweakError` por ajuste — um ajuste já aplicado ou que falhe não aborta os demais. Retorna uma lista de `(tweak_id, status, nota)` por ajuste, com `status` em `True` (aplicado), `False` (falhou) ou `None` (pulado por falta de admin).
-
-### 2. Mapeamento dos 4 níveis (confirmado com o usuário via pergunta em plan mode)
-
-| Nível | Pastas limpas | Ajustes aplicados |
-|---|---|---|
-| Leve | User Temp | `visual_effects` |
-| Mediana | + System Temp | + `power_plan` |
-| Alta | + Prefetch | + `hibernation`, `indexing` |
-| Extrema | (mesmas de Alta) | + `telemetry`, `sysmain`, `compat_appraiser` |
-
-Leve e Mediana nunca exigem admin (só usam os 2 ajustes sem esse requisito); Alta e Extrema aplicam tudo que estiver disponível e **pulam graciosamente** — nunca travam a execução inteira — o que exigir admin quando o terminal não está elevado, mesma filosofia que `cmd_clean` já usava para filtrar pastas.
-
-### 3. Refatoração: `frontend/components/_terminal.py` (novo, compartilhado)
-
-A lógica de "aguardar uma tecla e opcionalmente fechar o terminal via `WM_CLOSE`" existia só em `completion.py`. Extraída para `wait_for_keypress_and_maybe_close(close_terminal)` em `_terminal.py`, reaproveitada por `completion.py` (`clean`) e pelo novo `level_completion.py` (`menu`) — evita duplicar a dança de `ctypes`/`msvcrt`/fallback POSIX uma segunda vez. Comportamento de `completion.py` preservado byte a byte (mesmo texto, mesma sequência), só a implementação interna mudou.
-
-### 4. Novos componentes de frontend
-
+# CHANGES
+
+## feat: upgrade completo de UI retrô 8-bit — paletas, sprites animados, loot breakdown e typewriter
+
+Expande a interface gráfica de terminal do System Boost com 4 novas funcionalidades visuais e interativas de estética retrô 8-bit:
+1. **Seletor de Paletas Retrô** (5 esquemas de cores inspirados em consoles e monitores CRT clássicos, com persistência e atalho de tecla).
+2. **Sprites Animados no Loading** (micro-animação contínua estilo Pac-Cleaner devorando dados temporários).
+3. **Gráfico de Pré-Inspeção de Disco ("Loot Breakdown")** (barras horizontais de porcentagem e distribuição do volume antes da limpeza).
+4. **Efeito Typewriter com Micro-Cliques de Áudio** (renderização estilo máquina de escrever em diálogos de briefing com cancelamento instantâneo).
+
+```
+python main.py
+python main.py menu [-p {dmg,pocket,arcade,amber,matrix}] [--no-sound]
+python main.py clean [--dry-run] [-p {dmg,pocket,arcade,amber,matrix}] [--no-sound]
+```
+
+### Funcionalidades implementadas
+
+1. **Seletor Dinâmico de Paletas Retrô (`frontend/palettes.py`)**:
+   - 5 paletas completas com tokens semânticos:
+     - `dmg`: **Game Boy Classic (DMG-01)** — verde LCD autêntico de 4 tons.
+     - `pocket`: **Game Boy Pocket** — monocromático cinza/prata de alto contraste.
+     - `arcade`: **Cyber Arcade 80s** — neon ciano, magenta e amarelo arcade.
+     - `amber`: **Phosphor Amber CRT** — âmbar clássico de terminais IBM/VT100.
+     - `matrix`: **Matrix Terminal** — fundo escuro e verde código fosforescente.
+   - **Tecla de atalho `[P]` no menu**: cicla instantaneamente entre as paletas com feedback sonoro `play_blip()` e atualiza a interface em tempo real.
+   - **Persistência automática**: salva a escolha em `%LOCALAPPDATA%\WinCleaner\ui_config.json`.
+   - **Flag CLI `--palette <nome>` / `-p <nome>`**: permite iniciar o programa diretamente no tema desejado.
+
+2. **Sprite Pixel Art Animado no Loading (`frontend/components/retro_sprite.py` & `loading.py`)**:
+   - Adicionada a coluna `RetroSpriteColumn` ao `rich.progress.Progress`.
+   - Conforme os arquivos são varridos e apagados, um sprite de "Pac-Cleaner" (`[C • • •]`, `[ C• • •]`, ..., `[ ★ OK!]`) anima continuamente junto com a barra de energia retrô (Energy Gauge).
+
+3. **Gráfico de Pré-Inspeção do Disco ("Loot Breakdown") (`frontend/components/disk_breakdown.py`)**:
+   - Função `measure_paths_sizes(paths)` que mede com segurança os bytes ocupados em cada setor antes da confirmação.
+   - Painel `create_disk_breakdown_panel(sizes)` com barras de porcentagem proporcionais (`[████████░░░░░░░░] XX%`) e total estimado legível em KB/MB/GB.
+   - Integrado automaticamente à tela de confirmação de missão do menu (`display_level_summary`).
+
+4. **Efeito Typewriter com Som (`frontend/typewriter.py`)**:
+   - Função `typewriter_print(console, text, speed, sound, skip)`.
+   - Micro-cliques suaves chiptune via `play_typewriter_click()` em `frontend/audio.py`.
+   - Cancelamento instantâneo (instant skip) ao pressionar qualquer tecla (`kbhit`) ou em pipes e testes automatizados.
+
+5. **Navegação Híbrida & Áudio Chiptune Nativo**:
+   - Menu navegável por setas do teclado (`↑` e `↓` com ponteiro retrô `►` e `Enter`) ou seleção direta numérica (`1`-`5`).
+   - Fanfarra triunfal de vitória de 4 notas (`play_victory()`) na tela de resultado.
+   - Flag `--no-sound` disponível em todos os subcomandos interativos.
+
+### Arquivos novos
+
+### Arquivos novos
+
+- `frontend/audio.py`:
+  - Gerador de bipes chiptune via `winsound.Beep` no Windows.
+  - Funções de áudio: `play_blip()`, `play_select()`, `play_start()`, `play_victory()`, `play_error()`, `play_typewriter_click()`.
+  - Controle de ativação global: `set_sound_enabled(bool)` e `is_sound_enabled()`.
+  - Tratamento defensivo de exceções e execução em thread separada.
+- `frontend/palettes.py`:
+  - 5 paletas retrô (`dmg`, `pocket`, `arcade`, `amber`, `matrix`), `get_theme()`, `cycle_palette()`, `save_palette()`, `load_palette()`.
+- `frontend/components/retro_sprite.py`:
+  - Frames de animação do Pac-Cleaner (`PAC_CLEANER_FRAMES`) e vassoura pixelada (`BROOM_FRAMES`).
+- `frontend/components/disk_breakdown.py`:
+  - `measure_paths_sizes()` e `create_disk_breakdown_panel()`.
+- `frontend/typewriter.py`:
+  - `typewriter_print()` com delay por caractere, clicks de áudio e skip instantâneo.
+- `tests/test_audio.py`: 4 testes unitários de áudio.
+- `tests/test_palettes.py`: 4 testes unitários de paletas e temas.
+- `tests/test_disk_breakdown.py`: 3 testes unitários de medição e renderização do painel.
+- `tests/test_retro_sprite.py`: 2 testes unitários de frames do sprite animado.
+- `tests/test_typewriter.py`: 3 testes unitários do efeito máquina de escrever.
+- `tests/test_retro_ui.py`: 7 testes unitários dos componentes, tema e navegação.
+
+### Arquivos alterados
+
+- `frontend/cli.py`:
+  - Reconfiguração para UTF-8 de `sys.stdout` e `sys.stderr` no Windows.
+  - Carregamento dinâmico de paletas e integração com `palettes`.
+  - Exposição de `apply_palette` e `cycle_active_palette`.
+- `frontend/components/welcome.py`:
+  - Banner em blocos sólidos `█ ▀ ▄` do System Boost Game Boy Edition, moldura dupla e chamada de `play_start()`.
 - `frontend/components/level_menu.py`:
-  - `display_level_menu(console)` — tabela `rich` com os 4 níveis, lê a escolha via `rich.prompt.IntPrompt.ask(..., choices=["1","2","3","4"])` (dependência já existente, nenhuma instalação nova).
-  - `display_level_summary(console, ...)` — painel mostrando o que será limpo e quais ajustes serão aplicados vs. pulados (admin), depois `rich.prompt.Confirm.ask("Prosseguir?", default=True)`.
-- `frontend/components/level_completion.py`: painel combinado (bytes liberados + contagem de aplicados/pulados/falharam), reaproveitando `wait_for_keypress_and_maybe_close` — **esta tela fecha o terminal ao final**, igual ao `clean`, porque o fluxo guiado é agora a experiência "clique e pronto" primária que o `clean` originalmente visava. `list`/`apply`/`undo` continuam sem essa cerimônia.
-- `frontend/cli.py` ganhou `show_level_menu`, `show_level_summary`, `show_level_completion`, seguindo a convenção de wrapper fino já usada pelos comandos existentes.
+  - Navegação híbrida com setas `↑`/`↓` + `Enter`, teclas `1-5`, tecla `P` para alternar paletas e painel de Loot Breakdown no briefing.
+- `frontend/components/loading.py`:
+  - Coluna `RetroSpriteColumn` com animação contínua do Pac-Cleaner e Energy Bar retrô.
+- `frontend/components/driver_progress.py`:
+  - Barra de progresso estilizada com temas retrô.
+- `frontend/components/completion.py` e `frontend/components/level_completion.py`:
+  - Painéis com `box.DOUBLE`, pontuação retrô (`TOTAL SCORE`), preservação estrita de todos os textos originais e fanfarra de vitória (`play_victory()`).
+- `frontend/components/machine_info.py`:
+  - Ficha da máquina com moldura dupla `box.DOUBLE` e cabeçalho retrô.
+- `frontend/components/tweak_list.py` e `frontend/components/tweak_result.py`:
+  - Inventário de ajustes com molduras retrô e bordas duplas.
+- `main.py`:
+  - Flags `--no-sound` e `--palette` / `-p` nos subparsers `menu` e `clean`.
+  - Repasse da configuração para `set_sound_enabled` e `apply_palette` em `main()`.
+- `tests/test_main.py`:
+  - Testes unitários para as flags `--no-sound` e `--palette`.
 
-### 5. `main.py`: novo subcomando `menu` + mudança no argv padrão
+### Verificação
 
-- `COMMANDS` ganhou `"menu"`.
-- **Só `argv` vazio** agora mapeia para `["menu"]` em vez de `["clean"]`. O ramo existente `elif argv[0] not in COMMANDS: argv = ["clean"] + argv` foi mantido intacto — flags soltas como `--dry-run -y` (sem palavra-chave de subcomando) continuam implicando `clean`, preservando a retrocompatibilidade já testada.
-- **Nome do subcomando corrigido de `boost` para `menu` durante a implementação**: a primeira tentativa usou `boost` (mesmo nome do `prog=` do argparse, que já é "boost" desde a sessão anterior), o que gerava `usage: boost boost [-h] [-y]` — confuso. Renomeado para `menu` (`usage: boost menu [-h] [-y]`, lê corretamente).
-- `cmd_menu(args)`: `show_welcome` → `show_level_menu()` → `profiles.resolve_clean_paths`/`resolve_tweak_plan` → se não `--yes`, `show_level_summary(...)` (recusar aborta sem alterar nada) → `show_loading(clean_paths, clean_directory, format_size, dry_run=False)` (reaproveitado de `cmd_clean`, mesmo formato de dict) → `profiles.apply_level_tweaks(level_id)` → `show_level_completion(...)`.
-- `_DISPATCH` ganhou `"menu": cmd_menu`.
+- `pytest -v`: 232 passed (100% de aprovação).
+- Execução real no terminal Windows testando `menu`, `clean --dry-run`, `info`, `list` e chaveamento de paletas.
+- Sem inclusão de bibliotecas externas pesadas; totalmente compatível com o build executável PyInstaller.
+- Sem inclusão de bibliotecas externas pesadas; totalmente compatível com o build executável PyInstaller.
 
-### 5.1. Tela de conclusão: Enter para sair, ESC para voltar ao menu (refinamento pedido após a primeira versão)
 
-A tela de conclusão do `menu` originalmente saía com qualquer tecla. Adicionado: **Enter (ou qualquer tecla que não seja ESC) sai**, **ESC volta ao menu de níveis** (sem reabrir a tela de boas-vindas) para escolher outro nível sem reiniciar o processo.
+## feat: "ficha da máquina" — comando `info` e opção 5 do menu
 
-- `frontend/components/_terminal.py`: extraída `_read_single_key()` (leitura crua compartilhada, Windows via `msvcrt.getch()` / POSIX via `termios`) e `_close_terminal()` (a chamada `WM_CLOSE`) das duas funções públicas existentes. Nova função `wait_for_exit_or_back(close_terminal=True)`: lê uma tecla, retorna `"back"` se for ESC (`b'\x1b'`/`'\x1b'`), senão fecha o terminal (se pedido) e retorna `"exit"`. `wait_for_keypress_and_maybe_close()` (usada por `completion.py`/`clean`) manteve o comportamento idêntico, só reaproveitando os dois helpers privados internamente.
-- `frontend/components/level_completion.py`: não chama mais `sys.exit(0)` internamente — retorna `"exit"` (quando `skip_wait=True`, ou depois de `wait_for_exit_or_back`) ou `"back"` para quem chamou decidir, mesmo padrão dos outros componentes que nunca finalizam o processo sozinhos.
-- `frontend/components/level_menu.py`: `display_level_menu()` ganhou `console.clear()` no início, para a tela renderizar limpa quando o usuário volta do completion via ESC.
-- `main.py`: `cmd_menu()` virou um laço (`while True`) em torno de menu → resumo → execução → conclusão; só sai do laço quando `show_level_completion(...)` retorna algo diferente de `"back"`. Com `-y`, `skip_wait=True` sempre retorna `"exit"` na primeira volta, então o comportamento não-interativo/scriptado não muda.
-- Nenhum teste novo (mesma justificativa já registrada: componentes de teclado em `frontend/components/*` não são testados unitariamente neste repo). Verificado via `subprocess.run(["python","main.py","menu","-y"], input=b"1\n")` que o caminho `-y` continua saindo limpo após uma única volta do laço; o caminho interativo ESC/Enter foi verificado por inspeção de código pela mesma limitação de `msvcrt.getch()` com stdin pipado já documentada acima.
+Mostra um resumo da máquina: versão e compilação do Windows, processador, memória instalada, placa(s) de vídeo, tipo do disco do sistema (SSD/HDD) e se é notebook ou desktop. Implementa o item "Hardware detection" do roadmap do `CLAUDE.md`.
 
-### 6. Testes (`tests/test_profiles.py`, `tests/test_main.py`)
-
-Segue o padrão `monkeypatch`-o-colaborador já estabelecido em `tests/test_tweaks/test_manager.py` (nenhum teste toca `winreg`/`subprocess` reais aqui — `profiles.py` não fala com o Windows diretamente, só orquestra `cleaner`/`tweaks`).
-
-- `resolve_clean_paths`: cada nível retorna exatamente suas pastas declaradas; admin=False derruba System Temp/Prefetch; filtra para o que `get_temp_paths()` reporta como existente.
-- `resolve_tweak_plan`: ajustes que exigem admin caem em `skipped` sem elevação e em `applicable` com elevação; Leve nunca tem ajuste pulado (só usa `visual_effects`, que não exige admin).
-- `apply_level_tweaks`: chama `apply_tweak` só para ids `applicable` (nunca para os pulados), coleta `(id, True, None)` em sucesso e `(id, False, str(exc))` em `TweakError`.
-- `tests/test_main.py`: `parse_args([])` agora resolve para `"menu"` (era `"clean"`); `parse_args(["menu", "-y"])` funciona; `parse_args(["--dry-run", "-y"])` continua resolvendo para `"clean"` (guarda de regressão da retrocompatibilidade).
-
-Nenhum teste novo para `frontend/components/level_menu.py`/`level_completion.py` — mesmo precedente já estabelecido (`frontend/components/*` não é testado unitariamente neste repo).
-
-**84 testes, todos passando** (`pytest -v` → `84 passed`; 72 pré-existentes + 12 novos).
-
-### Verificação executada
-
-- `pytest -v` — 84/84 passando.
-- `python main.py --help` / `python main.py menu --help` — confirma que o nome do subcomando (`menu`) não colide mais com o `prog` (`boost`) depois da correção do item 5.
-- Smoke test via `subprocess.run(..., input=b"1\n")` (nível Leve, `-y`): aplicou `visual_effects`, limpou `User Temp`, tela final reportou "1 ajuste(s) aplicado(s)" — confirmado inspecionando `%LOCALAPPDATA%\WinCleaner\tweaks_state.json` antes/depois.
-- Mesmo teste com nível Extrema (não-admin): "2 ajuste(s) aplicado(s)" (`visual_effects`, `power_plan`) + "5 pulado(s) (requer Administrador)" (`hibernation`, `indexing`, `telemetry`, `sysmain`, `compat_appraiser`) — confirma a degradação graciosa sem admin.
-- **Limitação de teste descoberta e documentada** (em `CLAUDE.md`): `msvcrt.getch()` (usado pelas telas de boas-vindas/conclusão quando `skip_wait=False`) lê diretamente do console e trava indefinidamente com stdin redirecionado/pipado — diferente de `rich.prompt.IntPrompt`/`Confirm`, que funcionam normalmente com stdin pipado. Por isso o caminho de "usuário recusa a confirmação" (que passa pela tela de boas-vindas com keypress real) foi verificado por inspeção de código, não por execução automatizada — mesma limitação já documentada para outros componentes de frontend deste repo.
-- Regressão manual: `python main.py list`, `python main.py --dry-run -y` e `python main.py clean --dry-run -y` continuam idênticos a antes da mudança (confirma que a extração de `_terminal.py` e a troca do argv padrão não quebraram nada existente).
-- Máquina de desenvolvimento verificada limpa ao final (nenhum ajuste ficou aplicado depois dos testes).
-
-### Documentação atualizada
-
-- `docs/funcionamento.md`: nova seção "Fluxo Guiado (`menu`)" com diagrama de sequência das 4 telas, tabela dos 4 níveis, e a nota sobre degradação graciosa; diagrama de arquitetura geral atualizado para incluir `backend/profiles.py` e os novos componentes.
-- `docs/README.md` e `README.md` (raiz): seção de uso reescrita para deixar claro que `python main.py` sem argumentos agora abre o fluxo guiado, com `clean` como comando explícito para o comportamento direto anterior.
-- `CLAUDE.md`: nova subseção de arquitetura para `backend/profiles.py`, nota sobre a limitação de teste do `msvcrt.getch()` com stdin pipado, e a linha do roadmap "1-click quick profile" marcada como superada por este módulo (4 níveis em vez de um pacote único).
-
-### Nota lateral: arquivo `README.md` da raiz
-
-Durante esta sessão, `docs/README.md` (o único README rastreado no histórico do git até então) desapareceu do disco e seu conteúdo apareceu em `README.md` na raiz do projeto — um evento de sistema de arquivos fora do controle das minhas chamadas de ferramenta (nenhum comando de mover/renomear foi executado). Como consequência, e porque o `README.md` da raiz é o que o GitHub efetivamente exibe na página inicial do repositório, `docs/README.md` foi restaurado como o índice curto da pasta `docs/` (seu propósito original) e `README.md` na raiz foi escrito como o README principal e mais completo do projeto — este último agora é o arquivo git deve passar a rastrear oficialmente a partir do próximo commit.
-
-### Pendências / próximos passos sugeridos (fora do escopo deste commit)
-
-- Itens 3-7 do roadmap original (monitor de recursos, análise de disco por categoria, inventário de drivers, debloat/startup, detecção de hardware) — módulos futuros já nomeados em `CLAUDE.md`, nenhum código criado ainda.
-- `boost quick` como comando fixo de automação (ex: `python main.py menu -y` já cobre uso não-interativo escolhendo o nível via stdin, mas não há uma forma de passar o nível direto por flag como `--level extrema` — considerar se vale a pena adicionar).
-
----
-
-## 2026-09-23 — Sistema de ajustes reversíveis do Windows (item 1 do roadmap "System Boost")
-
-Baseado no plano de ação aprovado em `C:\Users\fegro\.claude\plans\pasted-content-id-ebf4-quero-evoluir-replicated-fairy.md`. Primeira peça da evolução do WinCleaner para um "system boost" mais completo (inspirado no Dilera Boost), mantendo o princípio de ferramenta 100% local: sem login, conta, licenciamento, telemetria enviada para fora, verificação online, download de binários de terceiros, ou alteração de pastas de jogos.
-
-### 1. Novo subpacote `backend/tweaks/`
-
-- `base.py`: `Tweak(ABC)` com `get_current_value()`/`apply()`/`undo(previous_value)` abstratos, e `TweakError`. Única exceção deliberada e escopada ao uso de classes no backend (resto do backend é só funções) — justificada porque os 7 ajustes têm mecanismos heterogêneos e exigem polimorfismo real; uma subclasse esquecendo `undo()` falha em `TypeError` na hora de instanciar, não silenciosamente em runtime no pior momento (quando o usuário precisa desfazer algo).
-- Classes de mecanismo, organizadas por **como** falam com o Windows (não uma por ajuste, pra não duplicar código entre ajustes que compartilham mecanismo):
-  - `registry_value.py` → `RegistryValueTweak` (leitura/escrita genérica de um valor DWORD via `winreg`) — usada por `visual_effects` e `telemetry`.
-  - `services.py` → `ServiceStateTweak` (leitura via `winreg`, escrita via `sc.exe`) — usada por `indexing` (WSearch) e `sysmain` (SysMain).
-  - `scheduled_tasks.py` → `ScheduledTaskTweak` (`schtasks.exe`) — usada por `compat_appraiser`.
-  - `power_plan.py` → `PowerPlanTweak`; `hibernation.py` → `HibernationTweak` — cada uma isolada apesar de ambas chamarem `powercfg.exe`, porque a semântica de leitura/escrita é genuinamente diferente entre as duas.
-- `catalog.py`: instancia os 7 ajustes concretos (`_build_catalog()`, chamada sob demanda, não cacheada), expõe `list_tweaks()` (ordenado por id) e `get_tweak(id)` (levanta `TweakError` em id desconhecido).
-- `state_store.py`: persistência em JSON, funções puras (`load_state`, `save_applied`, `get_applied`, `clear_applied`, `list_applied`), todas aceitando `path=None` (default `%LOCALAPPDATA%\WinCleaner\tweaks_state.json`) para testabilidade sem depender de variável de ambiente real.
-- `manager.py`: `apply_tweak`, `undo_tweak`, `undo_all`, `list_status` — coordena checagem de admin, lookup no catálogo e leitura/escrita de estado.
-- `__init__.py`: reexporta a API pública do subpacote.
-
-### 2. Decisões de design importantes
-
-- **Leituras via `winreg`, não parsing de stdout de `.exe`**: a saída de `sc.exe`/`schtasks.exe`/`powercfg.exe` é localizada no idioma de exibição do Windows (esta UI já é pt-BR, então o risco de quebrar com regex de string em inglês é real, não hipotético). Escritas continuam usando os `.exe`s, já que as flags de linha de comando são fixas (não traduzidas).
-- **Bug descoberto e corrigido durante verificação manual**: `schtasks /Query /XML ONE` declara `encoding="UTF-16"` no prólogo do XML, mas os bytes capturados via pipe do `subprocess` são, na prática, UTF-8 — `ET.fromstring(bytes)` confiava na declaração errada e falhava o parse silenciosamente (o ajuste `compat_appraiser` aparecia como valor `None` no `boost list`). Corrigido decodificando `result.stdout` como UTF-8 para `str` antes de entregar ao `ElementTree` (string não carrega declaração de encoding, então o parser não tenta reinterpretar os bytes).
-- **Nome real da tarefa agendada confirmado na máquina de dev**: `schtasks /Query /FO CSV` mostrou que a tarefa se chama `Microsoft Compatibility Appraiser Exp` nesta build do Windows 11 (sufixo "Exp" que não existe em builds mais antigas) — `catalog.py` usa o nome confirmado, com comentário explicando a origem.
-- **Admin: falha clara, sem auto-elevação via UAC.** `manager.py` verifica `is_admin()` (reutilizando `backend/privileges.py` sem modificá-lo) e levanta `TweakError` pedindo para reabrir como Administrador, em vez de relançar o processo elevado. Mantém `--yes`/uso automatizado possível e evita prompt de elevação surpresa — coerente com o princípio "sem login/conta/telemetria" do projeto. Leituras (`get_current_value`, usado por `boost list`) nunca exigem admin — todas passam por `HKLM` (legível por qualquer usuário) ou consulta de tarefa.
-- **Estado em JSON, não SQLite**: no máximo ~10-20 registros previstos no roadmap inteiro, escritor único, sem necessidade de joins/queries — um dict indexado por `tweak_id`, sem dependência nova. Escrita atômica (arquivo temporário + `os.replace`) evita corromper o estado numa queda no meio da escrita.
-- **Reaplicar um ajuste já aplicado é rejeitado, nunca sobrescrito** — sobrescrever destruiria o `previous_value` original verdadeiro, tornando o undo inútil.
-- **`previous_value: null` é significativo** (chave/valor não existia antes do `apply`) — `undo()` apaga o valor do registro nesse caso, em vez de escrever `null`.
-- **Ordenação de `undo --all` via contador `_seq` interno**, não por `applied_at` (timestamp) — evita flakiness em caso de resolução de relógio baixa/empates; `_seq` incrementa a cada `save_applied` e é sempre monotônico dentro do processo.
-
-### 3. Os 7 ajustes (`backend/tweaks/catalog.py`)
-
-`power_plan` (Alto Desempenho, sem admin), `hibernation` (desativa hibernação, admin), `visual_effects` (melhor desempenho, sem admin), `telemetry` (minimiza telemetria, admin), `indexing` (desativa WSearch, admin), `sysmain` (desativa SysMain/Superfetch, admin), `compat_appraiser` (desativa tarefa de verificação de compatibilidade, admin). Tabela completa com mecanismo de leitura/escrita e valor capturado em [docs/funcionamento.md](docs/funcionamento.md).
-
-### 4. `main.py`: `argparse` com subcomandos
-
-- `boost clean [--dry-run] [--paths ...] [--yes] [--no-close]` — comportamento idêntico ao anterior, sem mudanças de UX.
-- `boost list` — tabela com todos os ajustes, requisito de admin, valor atual e status (aplicado ou não).
-- `boost apply <tweak_id>` / `boost undo <tweak_id>` / `boost undo --all`.
-- **Retrocompatibilidade preservada**: `python main.py --dry-run -y` (sem palavra-chave de subcomando) continua funcionando exatamente como antes — `parse_args()` detecta que o primeiro argumento não é um subcomando conhecido e insere `clean` implicitamente.
-- `main.py` continua sendo o único ponto de wiring entre `backend` e `frontend` (nenhuma mudança nesse princípio); a divisão em um pacote `cli/` fica adiada até haver 5-6+ `cmd_*` com lógica própria relevante (documentado em `CLAUDE.md`).
-
-### 5. Novos componentes de frontend
-
-- `frontend/components/tweak_list.py`: tabela `rich` para `boost list`.
-- `frontend/components/tweak_result.py`: painéis de sucesso/erro para `apply`/`undo`, e listagem linha-a-linha para `undo --all`.
-- Deliberadamente **não** reusam a cerimônia de `display_completion_screen` (espera de tecla + `WM_CLOSE` do terminal) — essa cerimônia foi desenhada para `clean` (clique duplo e fecha), enquanto `list`/`apply`/`undo` são pensados para rodar em sequência num terminal já aberto.
-- `frontend/cli.py` ganhou `show_tweak_list`, `show_tweak_success`, `show_tweak_error`, `show_undo_all_results`, seguindo a mesma convenção de wrapper fino dos comandos existentes.
-
-### 6. Nenhuma dependência nova
-
-Todo o subsistema usa só biblioteca padrão: `subprocess`, `winreg`, `json`, `datetime`, `xml.etree.ElementTree`, `abc`, `os`, `tempfile`, `pathlib`. `requirements.txt`/`requirements-dev.txt` inalterados.
-
-### 7. Testes (`tests/test_tweaks/`, `tests/test_main.py`)
-
-Segue a convenção já estabelecida em `tests/test_cleaner.py`/`test_privileges.py`: funções pytest puras, `tmp_path` para estado em disco, `monkeypatch` para simular `winreg`/`subprocess.run` sem tocar o Windows real.
-
-- `conftest.py`: `FakeWinReg` (registro em memória, chaveado por `(hive, path)`, com helpers `seed`/`has_value` para os testes) e `FakeSubprocessRun` (grava todas as chamadas, resposta scriptável via `returncode`/`stdout`).
-- `test_base.py`: ABC não instanciável diretamente; subclasse incompleta não instanciável.
-- `test_registry_value.py`, `test_services.py`, `test_scheduled_tasks.py`, `test_power_plan.py`, `test_hibernation.py`: leitura com chave/valor ausente, leitura com valor presente, `apply` escreve o valor alvo, `undo` restaura o valor anterior (incluindo o caso de apagar quando `previous_value is None`), falha limpa (`TweakError`) em `returncode != 0`.
-- `test_catalog.py`: exatamente 7 ajustes, ids únicos, `get_tweak` de id desconhecido levanta `TweakError`.
-- `test_state_store.py`: round-trip de `save_applied`/`get_applied`, segunda gravação sobrescreve sem duplicar, `clear_applied` remove, ordenação de `list_applied` mais-recente-primeiro.
-- `test_manager.py`: usa um `StubTweak` (dublê, não os mecanismos reais) para isolar a lógica de coordenação — confirma que `get_current_value` é chamado antes de `apply` (a ordem que garante que o valor salvo é o original, não o já modificado), que o gate de admin bloqueia `apply`/`undo` **antes** de tocar no `Tweak` real, que reaplicar um id já aplicado é rejeitado sem alterar o registro original, que `undo` de um ajuste que requer admin sem elevação **mantém o registro** (permite retry), e que `undo_all` sobrevive a uma falha no meio do lote, na ordem mais-recente-primeiro.
-- `test_main.py`: subcomando implícito `clean` quando não há palavra-chave, flags antigas continuam mapeando pra `clean`, cada subcomando novo resolve corretamente, `undo` sem id nem `--all` sai com erro via `parser.error`.
-
-**72 testes, todos passando** (`pytest -v` → `72 passed`, incluindo os 13 testes pré-existentes de `test_cleaner.py`/`test_privileges.py`, inalterados).
-
-### Verificação executada
-
-- `pytest -v` — 72/72 passando.
-- Verificação prévia ao código (read-only, na máquina real): `powercfg /list`, `reg query` nas 4 chaves de registro usadas, `schtasks /Query /FO CSV` para achar o nome real da tarefa de compatibilidade — revelou o sufixo "Exp" e evitou codar contra um caminho inexistente.
-- `python main.py list` (não-admin) — mostra os 7 ajustes com valor atual correto (incluindo o bug do encoding UTF-16/UTF-8 do `compat_appraiser`, encontrado e corrigido nesta etapa).
-- `python main.py apply visual_effects` → estado salvo em `%LOCALAPPDATA%\WinCleaner\tweaks_state.json` com `previous_value: null`, `applied_value: 2`.
-- `python main.py undo visual_effects` → registro do `winreg` (`VisualFXSetting`) apagado (confirmado via `reg query` retornando erro de "não encontrado", como esperado), registro de estado removido do JSON.
-- `python main.py apply visual_effects` duas vezes seguidas → segunda chamada rejeitada com mensagem clara, sem sobrescrever `previous_value`.
-- `python main.py apply hibernation` sem terminal elevado → falha limpa com mensagem pedindo Administrador, nenhum estado gravado.
-- `python main.py undo --all` → desfez o único ajuste pendente (`visual_effects`), reportou `OK visual_effects`.
-- `python main.py --dry-run -y` (sem subcomando) → confirma retrocompatibilidade, comportamento idêntico ao pré-existente.
-- Máquina de desenvolvimento verificada limpa ao final: nenhum ajuste ficou aplicado, nenhuma chave de registro criada permaneceu.
-
-### Documentação atualizada
-
-- `docs/funcionamento.md`: nova seção "Ajustes Reversíveis" com diagrama de classes (`Tweak` e mecanismos), tabela dos 7 ajustes, schema do JSON de estado, diagrama de sequência de `apply`/`undo`, e a decisão de falha-clara para admin. Diagrama de arquitetura geral atualizado para incluir `backend/tweaks/`.
-- `docs/README.md`: seção "How to Use" ganhou os novos subcomandos (`list`/`apply`/`undo`).
-- `CLAUDE.md`: seção Architecture estendida com `backend/tweaks/` (abstração `Tweak`, decisões de locale-safety e admin hard-fail); nova seção "Roadmap" listando os 6 itens restantes do "System Boost" e seus módulos futuros (sem stubs criados); correção da linha desatualizada "No test suite... configured" (já não era verdade desde a suíte de testes anterior).
-
-### Pendências / próximos passos sugeridos (fora do escopo deste commit)
-
-- Itens 2-7 do roadmap (perfil "1 clique", monitor de recursos, análise de disco por categoria, inventário de drivers, debloat/startup, detecção de hardware) — módulos futuros já nomeados em `CLAUDE.md`, nenhum código criado ainda.
-- Testes de UI dos novos componentes (`tweak_list.py`/`tweak_result.py`) — deliberadamente fora de escopo, seguindo o precedente já estabelecido para `frontend/components/*`.
-
----
-
-## 2026-07-29 — Hardening: dry-run, seleção de paths, fix de I/O, testes, CI
-
-Baseado no plano de ação aprovado em `C:\Users\fegro\.claude\plans\claude-crie-um-plano-lovely-raven.md`. Objetivo: tornar o WinCleaner mais seguro de usar (não-destrutivo por padrão em modo dry-run), testável e com build reprodutível.
-
-### 1. CLI flags + dry-run + seleção de paths (`main.py`, `backend/cleaner.py`, `frontend/cli.py`, `frontend/components/{welcome,loading,completion}.py`)
-
-- `main.py` ganhou `argparse` com 4 flags:
-  - `-n` / `--dry-run`: simula a limpeza, não apaga nada, só reporta o que seria liberado.
-  - `--paths {User Temp,System Temp,Prefetch}` (`nargs="+"`): restringe a limpeza a um subconjunto das pastas (valida via `choices`, rejeita nomes inválidos com erro claro e exit code 2).
-  - `-y` / `--yes`: pula a tela de boas-vindas (keypress) e a tela final (keypress), permitindo uso automatizado/scriptado.
-  - `--no-close`: desativa o fechamento automático do terminal ao final.
-- `backend/cleaner.py`: `clean_directory()` ganhou parâmetro `dry_run=False`. Quando ativo, os tamanhos ainda são calculados (via `entry.stat().st_size` / `get_dir_size`) mas nenhum `os.remove`/delete acontece.
-- `paths_to_clean` em `main.py` agora é filtrado tanto pelo status de admin (lógica original) quanto por `--paths` (interseção).
-- `frontend/components/welcome.py`: `display_welcome_screen()` ganhou `skip_wait`, pulando a espera de tecla quando `--yes`.
-- `frontend/components/loading.py`: `run_cleanup_with_loading()` propaga `dry_run` para `clean_func` e troca o texto da barra de progresso ("Analisando arquivos (dry-run)..." vs "Limpando arquivos desnecessários...").
-- `frontend/components/completion.py`: `display_completion_screen()` ganhou `dry_run` (troca título/texto: "SIMULAÇÃO CONCLUÍDA" / "seriam limpos" vs "LIMPEZA CONCLUÍDA" / "foram limpos") e `skip_wait` (sai imediatamente sem esperar tecla quando `--yes`).
-
-### 2. Aviso de limpeza do Prefetch (`main.py`)
-
-Quando `"Prefetch" in paths_to_clean` (só ocorre em execução como admin) e `--yes` não foi passado, imprime aviso via `console` (já exposto em `frontend/cli.py`) antes de iniciar a limpeza, alertando que o Windows recria o Prefetch automaticamente mas isso pode afetar o próximo boot.
-
-### 3. Fix de double directory walk (`backend/cleaner.py`)
-
-Antes: para cada subpasta, `get_dir_size()` percorria a árvore inteira pra somar tamanho e depois `shutil.rmtree()` percorria de novo pra apagar — 2x I/O e risco de mismatch se arquivos mudassem entre as duas passadas.
-
-Agora: nova função `_remove_and_measure()` faz a travessia recursiva em passada única, apagando arquivo por arquivo e somando o tamanho ao mesmo tempo, depois remove o diretório vazio com `os.rmdir()`. Import de `shutil` removido (não é mais usado). `get_dir_size()` foi mantida intacta pois ainda é usada no caminho de `dry_run`.
-
-### 4. Suíte de testes pytest (`tests/`)
-
-Novos arquivos: `tests/__init__.py`, `tests/test_cleaner.py`, `tests/test_privileges.py`.
-
-Usa exclusivamente a fixture `tmp_path` do pytest — nenhum teste toca pastas reais do Windows. Cobertura:
-- `get_dir_size`: soma flat e aninhada, path inexistente retorna 0.
-- `clean_directory`: deleta e reporta tamanho corretamente, modo dry-run não apaga nada, path inexistente retorna 0, `PermissionError` num arquivo não aborta o resto (via `monkeypatch` em `os.remove`), `progress_callback` é chamado uma vez por entrada de topo.
-- `format_size`: tabela de casos (0 B, 1023 B, 1 KB, 1.5 KB, 1 GB).
-- `get_temp_paths`: filtra corretamente paths inexistentes (via `monkeypatch`).
-- `is_admin` (`backend/privileges.py`): os dois branches da API do Windows (`IsUserAnAdmin` retornando 1/0) via `types.SimpleNamespace` fake de `ctypes.windll`, e o fallback para `os.getuid()` quando `windll` não existe.
-
-**13 testes, todos passando** (`pytest -v` → `13 passed`).
-
-### 5. Pin de versões (`requirements.txt`, `requirements-dev.txt` novo)
-
-`requirements.txt` antes tinha `rich` e `pyinstaller` sem versão (build não-reprodutível). Verificado via `pip show` as versões instaladas no ambiente de dev e pinado com `~=` (compatible-release, permite patch mas trava major):
 ```
-rich~=15.0
-pyinstaller~=6.20
+python main.py info
 ```
-Novo `requirements-dev.txt` inclui `-r requirements.txt` + `pytest~=8.4`, mantendo o `requirements.txt` de runtime limpo para o build do PyInstaller (não precisa empacotar pytest no `.exe`).
 
-### 6. LICENSE (MIT), pyproject.toml, CI (GitHub Actions)
+Saída real na máquina de desenvolvimento:
 
-- `LICENSE`: texto padrão MIT, copyright `Grolla05`, ano 2026 (confirmado com o usuário via pergunta em plan mode).
-- `pyproject.toml`: `[project]` mínimo (name, version, description, requires-python, license) + `[tool.pytest.ini_options]` com `testpaths = ["tests"]` (substitui a necessidade de um `pytest.ini` separado). Não interfere no fluxo `build.py`/PyInstaller existente.
-- `.github/workflows/ci.yml`: workflow roda em `windows-latest` (obrigatório — `ctypes.windll` e `msvcrt` são Windows-only), em todo push/PR: instala `requirements-dev.txt` e roda `pytest -v`. Escopo intencionalmente limitado a testes; build/release automatizado do `.exe` fica fora deste escopo (usuário pode pedir depois se quiser releases automáticos).
+```
+Windows          Windows 11 Pro 24H2 (compilação 26100.9457)
+Processador      Intel(R) Core(TM) i7-4790 CPU @ 3.60GHz (8 threads)
+Memória          16 GB
+Placa de vídeo   Intel(R) HD Graphics 4600 / NVIDIA GeForce GTX 1650
+Disco do sistema SSD SATA — KINGSTON SA400S37240G
+Tipo             Desktop
+```
 
-### 7. Opt-out do force-close do terminal (`frontend/components/completion.py`)
+### Arquivos novos
 
-Ver item 1 acima — `close_terminal=True` por padrão (comportamento inalterado sem flags), controlável via `--no-close`. Auto-desativado quando `--dry-run` ou `--yes` são usados, para não matar o terminal do host (ex: terminal integrado de IDE) em uso scriptado/automatizado.
+- `backend/_powershell.py`
+  - `run_powershell(script, timeout)` e `PowerShellError`.
+  - Executa `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command`, com `stdin=DEVNULL`, e devolve stdout decodificado em `utf-8-sig`.
+  - Timeout, executável ausente (`OSError`) e returncode ≠ 0 viram `PowerShellError`.
+  - Cópia do padrão de `_run_powershell` em `backend/drivers.py`. `drivers.py` **não foi alterado**, porque `tests/test_drivers.py` faz patch de `drivers.subprocess.run`. Unificar os dois fica como follow-up.
+  - Exporta também `PS_PRELUDE` (UTF-8 no stdout + `$ErrorActionPreference='Stop'`).
+- `backend/hardware.py`
+  - `MachineInfo` (dataclass): `windows`, `version`, `build`, `cpu`, `threads`, `ram_gb`, `gpus` (lista), `disk_type`, `disk_model`, `disk_bus`, `form_factor`.
+  - `get_machine_info()` nunca levanta exceção. Cada campo falha de forma isolada: `None`, ou `[]` para GPUs.
+  - Windows: `winreg` em `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` (`ProductName`, `DisplayVersion` com fallback para `ReleaseId`, `CurrentBuildNumber`, `UBR`). Compilação ≥ 22000 troca "Windows 10" por "Windows 11" no nome, porque o registro mantém o nome antigo no Windows 11. Build exibida como `CurrentBuildNumber.UBR`, ou só `CurrentBuildNumber` se o `UBR` não existir.
+  - CPU: `winreg` em `HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0` (`ProcessorNameString`, espaços repetidos colapsados). Threads via `os.cpu_count()`.
+  - RAM: `ctypes` `GetPhysicallyInstalledSystemMemory` (KB instalados nos pentes). Fallback `GlobalMemoryStatusEx` (total utilizável). Arredondada em 1 casa.
+  - GPU, disco e tipo: **uma** chamada PowerShell/CIM (`CIM_TIMEOUT = 30s`) que devolve JSON. Cada consulta tem seu `try/catch` no script. Consultas: `Win32_VideoController`, `Get-Partition` + `Get-PhysicalDisk` (disco onde está `%SystemDrive%`), `Win32_SystemEnclosure.ChassisTypes`, `Win32_Battery`.
+  - `MediaType` e `BusType` são convertidos para string no script, e os valores de enum não são traduzidos pelo idioma do Windows. A regra do repo de não parsear stdout localizado foi respeitada.
+  - Disco: `SSD`/`HDD` direto de `MediaType` (aceita também `4`/`3` numéricos). `MediaType` vazio com barramento NVMe → SSD. Caso contrário `None`.
+  - Notebook × Desktop: chassi 8/9/10/11/14/30/31/32 → Notebook. Outro chassi informativo → Desktop. Chassi 1/2 ("Outro"/"Desconhecido"), ou lista vazia, usa a bateria como desempate. Sem nenhuma informação → `None`.
+  - GPUs duplicadas são removidas, preservando a ordem.
+  - Normaliza valores escalares do PowerShell (arrays de 1 item colapsam em escalar) com `_as_list`.
+  - Import de `winreg` protegido (`None` fora do Windows) para não quebrar ferramentas em outros sistemas.
+- `frontend/components/machine_info.py`
+  - `display_machine_info(console, info)`: tabela "A ficha da máquina", sem cabeçalho, com coluna de rótulos em `accent`.
+  - Campos vazios aparecem como `[dim]desconhecido[/dim]`. Uma linha por GPU. RAM inteira sem casa decimal (`16 GB`), fracionada com uma (`15.8 GB`).
+- `tests/test_powershell.py`: 4 testes (stdout decodificado e flags do comando, returncode ≠ 0, timeout, executável ausente).
+- `tests/test_hardware.py`: testes de Windows 11 detectado pela build, Windows 10 abaixo de 22000, build sem UBR, fallback para `ReleaseId`, falha de registro, CPU e threads, RAM (instalada, fallback, tudo falhando), GPUs (deduplicação e escalar), classificação de disco (6 casos), disco ausente, classificação de chassi (9 casos), chassi escalar, falha/JSON inválido/saída vazia do PowerShell degradando só os campos CIM, e `get_machine_info` nunca levantando exceção.
+- `tests/test_machine_info.py`: 6 testes de renderização (todos os campos, `desconhecido` sem `None` literal, RAM fracionada, várias GPUs, sem GPU, Desktop).
 
-### 8. Fix de link morto (`docs/README.md`)
+### Arquivos alterados
 
-Link absoluto `file:///d:/GitHub/Limpeza_TEMP/docs/funcionamento.md` (apontava pro nome antigo do repositório) trocado por link relativo `funcionamento.md` — sobrevive a clone em outra máquina ou rename futuro do repo. Também removida uma linha em branco duplicada adjacente (lint MD012).
+- `main.py`
+  - `"info"` adicionado a `COMMANDS`. Sem isso, o back-compat de flags soltas reescreveria `info` para `clean`.
+  - Novo subparser `info`, `cmd_info(args)` (modelo de `cmd_list`) e entrada em `_DISPATCH`, agora em várias linhas.
+  - Imports de `get_machine_info` e `show_machine_info`.
+- `frontend/cli.py`: import de `display_machine_info` e wrapper `show_machine_info(info)`.
+- `tests/test_main.py`: 3 testes novos (`parse_args(["info"])`, `info` em `COMMANDS`/`_DISPATCH`, `cmd_info` repassa o resultado de `get_machine_info` a `show_machine_info`).
+- `README.md`: feature, seção de uso e estrutura do projeto.
+- `docs/funcionamento.md`: nós no diagrama mermaid e seções de `hardware.py`, `_powershell.py` e `machine_info.py`.
+- `CLAUDE.md`: linha "Hardware detection" do roadmap marcada como feita, com a descrição da implementação.
 
-### Verificação executada
+### Opção 5 no menu guiado ("Ver ficha da máquina")
 
-- `python main.py --help` — todas as flags listadas corretamente.
-- `python main.py --dry-run --yes --paths "User Temp"` — roda sem travar em keypress, mostra "SIMULAÇÃO CONCLUÍDA" com tamanho correto, exit code 0, nenhum arquivo real apagado.
-- `python main.py --paths BadName` — argparse rejeita com erro claro, exit code 2.
-- `pytest -v` — 13/13 testes passando.
-- `pip install -r requirements.txt` — resolve normalmente com as versões pinadas.
+A ficha também aparece dentro da navegação do `python main.py` / `menu`, como quinta opção do menu de níveis. Escolher a opção mostra a ficha e, ao apertar qualquer tecla, volta ao menu de níveis.
 
-### Pendências / próximos passos sugeridos (fora do escopo deste commit)
+- `frontend/components/level_menu.py`
+  - Constante `INFO_CHOICE = "info"`. `display_level_menu` devolve esse valor (em vez de um id de nível) quando a opção é escolhida.
+  - Lista de opções `_OPTIONS = LEVEL_ORDER + (INFO_CHOICE,)`. Setas ↑/↓ circulam pelas 5 opções (de cima do 1 vai para o 5, de baixo do 5 vai para o 1), a tecla `5` escolhe direto, e o fallback sem terminal interativo aceita `1`–`5` no `IntPrompt`.
+  - `_read_menu_key` passou a aceitar o dígito `5`, nos ramos Windows e POSIX. Legenda do painel: `[1-5] Direto`.
+  - `_render_menu_panel` desenha "[5] VER FICHA DA MÁQUINA" com o mesmo ponteiro `►` dos níveis.
+  - Os níveis 1–4 e o comportamento da tecla ESC (devolve a opção selecionada) não mudaram.
+- `frontend/components/machine_info.py`: `display_machine_info(console, info, wait=False)`. Com `wait=True` limpa a tela, mostra a ficha, exibe "Pressione qualquer tecla para voltar ao menu..." e bloqueia em `_read_single_key()`. Sem isso o menu apagaria a ficha no redesenho seguinte. `wait=False` (padrão) mantém o comportamento do comando `info`.
+- `frontend/cli.py`: `show_machine_info(info, wait=False)` repassa o `wait`, e `INFO_CHOICE` é reexportado para o `main.py`.
+- `main.py` (`cmd_menu`): se `show_level_menu()` devolve `INFO_CHOICE`, lê a ficha, mostra com `wait=True` e volta ao início do loop (`continue`), sem passar pelo resumo/limpeza. A leitura do hardware (PowerShell/CIM, ~2s) roda **uma vez** por sessão, sob um spinner "Lendo hardware...", e é reaproveitada nas visualizações seguintes. Quem nunca escolhe a opção não paga custo nenhum.
+- `tests/test_info_option.py` (novo, 14 testes): constante exportada e fora de `LEVEL_ORDER`; painel com 5 opções; tecla `5`; setas até a opção 5; volta circular (`up` no primeiro, 5× `down`); fallback `IntPrompt` com `"5"` entre as opções; tela de ficha espera tecla só com `wait=True`; `show_machine_info` repassa `wait`; `cmd_menu` mostra a ficha e retorna ao menu sem tratar `info` como nível; hardware lido uma única vez em várias visualizações; nenhuma leitura quando a opção não é usada.
 
-- Release automatizado do `.exe` via CI (build+publish job) — não implementado, opcional.
-- Testes de UI (`frontend/components/*`) — deliberadamente fora de escopo (mocking de keypress/console/WM_CLOSE não compensa para utilitário single-maintainer).
+### Build: executável sempre como Administrador + identidade do publisher
+
+- `build.py` (refatorado em funções testáveis; `build()` continua sendo o ponto de entrada)
+  - `build_command(version_file)`: comando do PyInstaller, agora com `--uac-admin` (manifesto `requestedExecutionLevel=requireAdministrator`: o Windows mostra o UAC em toda abertura do `.exe`) e `--version-file=...`.
+  - `write_version_file(path, version)` / `version_tuple` / `project_version()`: gera o recurso de versão do exe com `CompanyName=Felipe Grolla`, `FileDescription=System Boost by Felipe Grolla`, `ProductName=System Boost`, `OriginalFilename=System Boost.exe` e a versão lida do `pyproject.toml` (fonte única; sufixos como `rc1` viram `.0` para caber nos 4 inteiros do Windows). O arquivo é gerado numa pasta temporária, porque `--clean` apaga `./build` antes de lê-lo.
+  - `sign_command` / `sign_if_configured`: se a variável `SYSTEM_BOOST_SIGN_THUMBPRINT` existir, roda `signtool sign /sha1 <thumbprint> /fd SHA256 /tr ... /td SHA256 /d "System Boost by Felipe Grolla"` no exe. Sem a variável, só avisa que não assinou.
+- `tests/test_build.py` (novo, 14 testes): flag `--uac-admin`, flags antigas preservadas, `--version-file`, versão igual à do `pyproject.toml`, `version_tuple`, conteúdo do recurso de versão (publisher/produto/versões), recurso válido para o PyInstaller (executado com as classes reais), comando do `signtool` e assinatura só quando há thumbprint.
+- Verificado com um build real (`python build.py`): manifesto `requireAdministrator` presente no exe; Properties → Detalhes mostra empresa "Felipe Grolla" e descrição "System Boost by Felipe Grolla"; assinatura `NotSigned`.
+- **Limite importante:** a linha "Editor verificado / Publisher" do UAC só mostra um nome quando o exe é assinado (Authenticode) com certificado emitido para esse nome. Sem assinatura o UAC mostra "Editor desconhecido" (escudo amarelo), mesmo com os metadados acima. Certificado de código (OV/EV, ou Azure Trusted Signing / SignPath) é compra/cadastro externo ao repositório; o `build.py` já assina sozinho quando houver um.
+- Efeito colateral do "sempre admin": o `.exe` abre o UAC e roda numa janela de console elevada própria, que fecha ao terminar. `info`/`list`/`apply`/`undo` chamados pelo `.exe` a partir de um terminal comum piscam e fecham. Para esses comandos, prefira `python main.py ...`. Rodando do código-fonte nada muda.
+- O `System Boost.spec` é ignorado pelo git (`*.spec`) e regravado pelo PyInstaller a cada build; não faz parte da mudança.
+
+### Decisões
+
+- **Sem dependência nova.** `psutil` não está no `requirements.txt` e não foi adicionado. `winreg`, `ctypes` e PowerShell cobrem tudo.
+- **Sem Administrador.** Todas as leituras funcionam em terminal comum.
+- **Dois pontos de entrada**: `python main.py info` (comando direto, sem espera) e a opção 5 do `menu` (sob demanda, volta ao menu). A ficha **não** aparece automaticamente antes do menu, então o fluxo normal e o `-y` não ficam mais lentos.
+- **`-y`/`--yes` não é afetado**: ele já pula o menu interativo, e a opção só existe quando alguém navega nele.
+
+### Verificação
+
+- `python -m pytest -q`: 206 passed.
+- Painel do menu renderizado com a opção 5 selecionada (conferido visualmente). A navegação por teclado real (`msvcrt`) está coberta por testes com `_read_menu_key` simulado, não por execução interativa.
+- `python main.py info` na máquina real: os 6 campos preenchidos e coerentes (tabela acima).
+- CI (`.github/workflows/ci.yml`): `pip install -r requirements.txt` + `pytest -v`. Os mesmos testes rodados localmente. Sem passo de lint.

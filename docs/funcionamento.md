@@ -14,6 +14,9 @@ graph TD
     A --> C[frontend/cli.py: Interface Central]
     A --> H[backend/tweaks/manager.py: Ajustes Reversíveis]
     A --> L[backend/profiles.py: Níveis do fluxo guiado]
+    A --> N[backend/hardware.py: Ficha da máquina]
+    N --> O[backend/_powershell.py: CIM via PowerShell]
+    C --> P[components/machine_info.py: Tabela da ficha]
     C --> D[components/welcome.py: Tela Inicial]
     C --> E[components/loading.py: Progresso da Limpeza]
     C --> F[components/completion.py: Tela de Sucesso e Fechamento]
@@ -57,6 +60,17 @@ Contém as regras de negócio para análise e exclusão física de arquivos e di
     *   Arquivos abertos ou bloqueados pelo sistema/outros programas geram `PermissionError` e são **pulados silenciosamente** sem travar o aplicativo.
     *   Dispara um callback em tempo real para atualizar o progresso visual na interface.
 
+#### 📄 `backend/hardware.py`
+Coleta a "ficha da máquina" (comando `info`). Backend puro, sem UI, **nunca levanta exceção**: cada campo que falhar fica `None` (ou `[]` para GPUs) e a tela mostra "desconhecido". Não exige Administrador.
+*   `get_machine_info()`: devolve um `MachineInfo` (`windows`, `version`, `build`, `cpu`, `threads`, `ram_gb`, `gpus`, `disk_type`, `disk_model`, `disk_bus`, `form_factor`).
+*   **Windows / CPU** via `winreg` (`HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` e `HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0`). O `ProductName` do registro ainda diz "Windows 10" no Windows 11, então a compilação ≥ 22000 troca o nome para "Windows 11". A compilação é exibida como `CurrentBuildNumber.UBR`.
+*   **RAM** via `ctypes`: `GetPhysicallyInstalledSystemMemory` (memória instalada nos pentes); se falhar, `GlobalMemoryStatusEx` (total utilizável).
+*   **GPU, disco e tipo** em **uma única** chamada PowerShell/CIM (`Win32_VideoController`, `Get-PhysicalDisk` do disco onde está o Windows, `Win32_SystemEnclosure.ChassisTypes`, `Win32_Battery`), com um `try/catch` por bloco no script para uma consulta ruim não derrubar as outras. Os valores lidos (`MediaType`, `BusType`, tipos de chassi) são enums e não são traduzidos pelo idioma do Windows. NVMe com `MediaType` vazio é tratado como SSD.
+*   **Notebook × Desktop**: chassi 8/9/10/11/14/30/31/32 → Notebook; qualquer outro chassi informativo → Desktop; chassi "Outro/Desconhecido" (1/2) usa a presença de bateria como desempate.
+
+#### 📄 `backend/_powershell.py`
+`run_powershell(script, timeout)` + `PowerShellError`: executa `powershell.exe` sem perfil, sem stdin, com timeout, e devolve stdout decodificado (`utf-8-sig`). Mesmo padrão do `_run_powershell` de `drivers.py` (que por ora continua com sua cópia própria).
+
 ---
 
 ### 3. Frontend (`/frontend`)
@@ -74,6 +88,9 @@ Define a paleta de cores padrão monocromática com destaque azul (`accent`):
 #### 📄 `frontend/components/loading.py`
 *   Varre previamente as pastas para calcular o número total aproximado de arquivos a serem deletados.
 *   Inicia uma barra de carregamento fluida com animação de spinner (`dots`) e preenchimento gradual, atualizada dinamicamente a cada arquivo deletado no backend.
+
+#### 📄 `frontend/components/machine_info.py`
+*   `display_machine_info(console, info)`: tabela "A ficha da máquina" com Windows, Processador, Memória, Placa de vídeo (uma linha por GPU), Disco do sistema e Tipo. Campos vazios aparecem como `desconhecido`.
 
 #### 📄 `frontend/components/completion.py`
 *   Exibe uma caixa de sucesso verde arredondada contendo o total limpo.
@@ -241,7 +258,9 @@ sequenceDiagram
 
 ## 🧭 Fluxo Guiado (`menu`) — comportamento padrão
 
-Quando `python main.py` é executado sem argumentos, o subcomando `menu` é implícito e apresenta um fluxo guiado por 4 telas:
+Quando `python main.py` é executado sem argumentos, o subcomando `menu` é implícito e apresenta um fluxo guiado por 4 telas.
+
+> **Opção 5 do menu — "Ver ficha da máquina":** além dos 4 níveis, o menu tem uma quinta opção que mostra a ficha (`backend/hardware.py`), espera uma tecla e volta ao menu, sem passar pelo resumo nem executar nada. O hardware é lido uma única vez por sessão (`display_level_menu` devolve `INFO_CHOICE` e `cmd_menu` guarda o resultado).
 
 ```mermaid
 sequenceDiagram

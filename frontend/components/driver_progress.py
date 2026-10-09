@@ -10,10 +10,10 @@ def run_driver_update_with_progress(console: Console, update_func, dry_run=False
     label = "Buscando drivers (dry-run)..." if dry_run else "Buscando drivers no Windows Update..."
 
     with Progress(
-        SpinnerColumn(spinner_name="dots"),
-        TextColumn("[accent]{task.description}"),
-        BarColumn(bar_width=40, style="accent", complete_style="accent"),
-        TaskProgressColumn(),
+        TextColumn("[bold #9bbc0f]DRIVERS:[bold #9bbc0f]"),
+        BarColumn(bar_width=35, style="#306230", complete_style="bold #9bbc0f"),
+        TaskProgressColumn(text_format="[bold #cadc9f]{task.percentage:>3.0f}%[/bold #cadc9f]"),
+        TextColumn("[dim #8bac0f]► {task.description}[/dim #8bac0f]"),
         console=console,
         transient=True,
     ) as progress:
