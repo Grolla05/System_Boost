@@ -1,5 +1,58 @@
 # CHANGES
 
+## feat: "Desfazer ajustes" na opção 6 do menu e aviso de como reverter
+
+O desfazer já existia no backend e na CLI (`python main.py undo <id>` / `undo --all`), mas não havia nada no menu guiado nem na tela de conclusão: quem usava só o menu aplicava ajustes (plano de energia, hibernação, telemetria, serviços...) sem saber que dava para voltar atrás. Agora o caminho aparece no fluxo.
+
+### O que mudou para o usuário
+
+- **Menu guiado, 6ª opção "DESFAZER AJUSTES"** (setas, tecla `6`, ou `6` no fallback sem terminal interativo). Fluxo: lista os ajustes aplicados → confirma → reverte todos → mostra OK/FALHA por ajuste e o total ("N de M ajuste(s) desfeito(s)") → volta ao menu.
+- **Sem nada aplicado**: mostra "Nenhum ajuste aplicado: nada para desfazer." e volta ao menu.
+- **Sem Administrador**: a confirmação avisa quais ajustes (os que exigem admin) não poderão ser desfeitos; no resultado eles aparecem como FALHA com o motivo, sem derrubar os demais.
+- **Tela de conclusão do nível** ganhou a linha "Para reverter: opção 6 do menu ou `python main.py undo --all`" sempre que algum ajuste foi aplicado (ou já estava aplicado).
+- **Briefing antes de executar** ganhou "Reversível: opção 6 do menu ou `python main.py undo --all`" quando o nível aplica ajustes.
+- `-y`/`--yes`: sem confirmação e sem esperar tecla no desfazer.
+
+### Arquivos
+
+- `backend/tweaks/manager.py`: `list_applied(state_path=None)` devolve `[(tweak, record)]` dos ajustes aplicados, do mais recente para o mais antigo. Só lê o state file (não consulta o Windows) e ignora ids que saíram do catálogo. Exportado em `backend/tweaks/__init__.py`.
+- `frontend/components/undo_menu.py` (novo): `display_undo_confirm`, `display_undo_empty`, `display_undo_results`.
+- `frontend/components/level_menu.py`: `UNDO_CHOICE = "undo"`, 6 opções em `_OPTIONS`, legenda `[1-6]`, constante `REVERT_HINT`, aviso de reversibilidade no briefing. Painel com largura mínima para a legenda não ser cortada por temas de nome longo.
+- `frontend/components/level_completion.py`: linha de como reverter.
+- `frontend/cli.py`: reexporta `UNDO_CHOICE` e expõe `show_undo_confirm`, `show_undo_empty`, `show_undo_results`.
+- `main.py`: `_run_undo_flow(args)` e o ramo `UNDO_CHOICE` no loop do `cmd_menu`. Um erro inesperado no desfazer vira painel de erro e o menu continua.
+- `tests/test_undo_option.py` (novo, 28 testes) e 4 testes em `tests/test_tweaks/test_manager.py` (`list_applied`). Em `tests/test_info_option.py`, dois testes de navegação circular foram ajustados para 6 opções (o "último" do menu agora é o desfazer).
+
+### Teste de regressão: a limpeza não apaga os dados do desfazer
+
+- `tests/test_state_survives_cleanup.py` (novo, 6 testes): o `tweaks_state.json` e o `ui_config.json` ficam fora de toda pasta que a limpeza esvazia (ambiente real e perfil simulado no padrão Windows, com `Temp` irmã de `WinCleaner`); limpar o `User Temp` apaga o lixo mas preserva o estado; os ajustes aplicados continuam listáveis para o desfazer depois de uma limpeza (inclusive `previous_value: null`); várias limpezas seguidas não corroem o estado.
+- Limite conhecido (não coberto pelo código): se alguém apontar `TEMP` para o mesmo diretório do `LOCALAPPDATA` (ou para um pai dele), a limpeza apaga a pasta `WinCleaner` e o desfazer perde os valores originais. Confirmado por simulação; não é a configuração padrão do Windows.
+
+### Verificação
+
+- `python -m pytest -q`: 270 passed (264 + os 6 acima, sem contar `tests/test_hardware_loading.py`) (sem contar `tests/test_hardware_loading.py`, de outra frente de trabalho, que importa um módulo ainda inexistente).
+- Telas renderizadas com o estado real da máquina em modo somente leitura (7 ajustes lidos do state file); o desfazer em si **não foi executado no Windows real**, só com o sistema simulado nos testes.
+- Navegação por teclado real (`msvcrt`) coberta por testes com `_read_menu_key` simulado.
+
+### build.py: aborta se o `System Boost.exe` anterior ainda estiver em execução
+
+- Causa do erro `Access is denied: ...\dist\System Boost.exe`: o PyInstaller apaga o `.exe` antigo antes de regravar, e o Windows nega enquanto ele roda (com `--uac-admin` o processo é elevado, e um terminal comum não consegue encerrá-lo).
+- `build.py`: `is_exe_running()` consulta `tasklist /FI "IMAGENAME eq System Boost.exe" /FO CSV /NH` e procura o nome do exe na saída (o nome não é localizado; a mensagem de "nenhuma tarefa" é, por isso não é usada). Falha do `tasklist` (`OSError`/timeout) nunca bloqueia o build. `build()` aborta antes do `pip install`/PyInstaller com instrução de como fechar o processo.
+- `tests/test_build.py`: +5 testes (exe detectado, sem correspondência, falha do tasklist, build aborta antes do PyInstaller).
+
+### Ficha da máquina centralizada no menu (`wait=True`)
+
+- `frontend/components/machine_info.py`: com `wait=True` a tabela e o aviso "Pressione qualquer tecla..." saem centralizados (`rich.align.Align`) com padding vertical. `wait=False` (comando `info`) não mudou.
+- Fecha `tests/test_hardware_loading.py::test_display_machine_info_centered_with_wait`.
+
+### Decisão: proteção da pasta `WinCleaner` na limpeza
+
+- Uma tentativa de proteger `%LOCALAPPDATA%\WinCleaner` na limpeza (módulo `backend/paths.py`) foi desfeita no editor e **não** será refeita. O "Limite conhecido" acima continua valendo.
+
+### Verificação (estado final)
+
+- `python -m pytest -q`: 278 passed. CI (`.github/workflows/ci.yml`: `pip install -r requirements.txt` + `pytest -v`) equivale ao mesmo comando.
+
 ## feat: upgrade completo de UI retrô 8-bit — paletas, sprites animados, loot breakdown e typewriter
 
 Expande a interface gráfica de terminal do System Boost com 4 novas funcionalidades visuais e interativas de estética retrô 8-bit:

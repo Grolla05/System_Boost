@@ -1,10 +1,12 @@
 from rich import box
+from rich.align import Align
 from rich.console import Console
 from rich.table import Table
 
 from ._terminal import _read_single_key, clear_screen
 
 _UNKNOWN = "[dim]desconhecido[/dim]"
+_SHEET_HEIGHT = 12  # table rows + borders + prompt, for vertical centering
 
 
 def _or_unknown(value):
@@ -67,8 +69,13 @@ def display_machine_info(console: Console, info, wait=False):
     table.add_row("Disco do sistema", _format_disk(info))
     table.add_row("Tipo", _or_unknown(info.form_factor))
 
-    console.print(table)
+    if not wait:
+        console.print(table)
+        return
 
-    if wait:
-        console.print("\n[bold #8bac0f]Pressione qualquer tecla para voltar ao menu...[/bold #8bac0f]")
-        _read_single_key()
+    console.print("\n" * max(1, (console.height - _SHEET_HEIGHT) // 2), end="")
+    console.print(Align.center(table))
+    console.print(
+        Align.center("\n[bold #8bac0f]Pressione qualquer tecla para voltar ao menu...[/bold #8bac0f]")
+    )
+    _read_single_key()

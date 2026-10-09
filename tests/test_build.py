@@ -102,3 +102,49 @@ def test_signing_runs_signtool_when_thumbprint_set(monkeypatch):
     assert build.sign_if_configured("dist/System Boost.exe") is True
     assert calls[0][0] == "signtool"
     assert "ABC123" in calls[0]
+
+
+def _fake_tasklist(monkeypatch, stdout="", returncode=0, raises=None):
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if raises:
+            raise raises
+        return build.subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(build.subprocess, "run", fake_run)
+    return calls
+
+
+def test_running_exe_detected_when_tasklist_lists_it(monkeypatch):
+    calls = _fake_tasklist(monkeypatch, stdout='"System Boost.exe","1234","Console","1","50,000 K"\n')
+
+    assert build.is_exe_running() is True
+    assert calls[0][0].lower() == "tasklist"
+    assert "System Boost.exe" in " ".join(calls[0])
+
+
+def test_running_exe_not_detected_when_tasklist_has_no_match(monkeypatch):
+    # tasklist prints a localized "no tasks" message, which must not match the exe name
+    _fake_tasklist(monkeypatch, stdout="INFORMACAO: nenhuma tarefa em execucao.\n")
+
+    assert build.is_exe_running() is False
+
+
+@pytest.mark.parametrize("raises", [OSError("no tasklist"), build.subprocess.TimeoutExpired("tasklist", 10)])
+def test_running_exe_check_never_blocks_build_on_failure(monkeypatch, raises):
+    _fake_tasklist(monkeypatch, raises=raises)
+
+    assert build.is_exe_running() is False
+
+
+def test_build_aborts_before_pyinstaller_when_exe_is_running(monkeypatch, capsys):
+    monkeypatch.setattr(build, "is_exe_running", lambda: True)
+    called = []
+    monkeypatch.setattr(build.subprocess, "check_call", lambda *a, **k: called.append(a))
+
+    build.build()
+
+    assert called == []
+    assert "System Boost.exe" in capsys.readouterr().out

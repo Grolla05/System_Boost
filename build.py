@@ -119,8 +119,29 @@ def sign_if_configured(exe_path):
     return True
 
 
+def is_exe_running():
+    """True if a previous System Boost.exe is still running: Windows can't overwrite it then."""
+    exe_name = f"{APP_NAME}.exe"
+    try:
+        result = subprocess.run(
+            ["tasklist", "/FI", f"IMAGENAME eq {exe_name}", "/FO", "CSV", "/NH"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return exe_name.lower() in (result.stdout or "").lower()
+
+
 def build():
     print("Starting build process...")
+
+    if is_exe_running():
+        print(
+            f"\nBuild aborted: {APP_NAME}.exe is still running and Windows cannot overwrite it.\n"
+            f"Close its window (or run `Stop-Process -Name \"{APP_NAME}\" -Force` in an "
+            "elevated PowerShell) and run build.py again."
+        )
+        return
 
     # Ensure dependencies are installed
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])

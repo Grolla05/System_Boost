@@ -3,6 +3,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from ._terminal import clear_screen, wait_for_exit_or_back
+from .level_menu import REVERT_HINT
 
 
 from ..audio import play_victory
@@ -25,6 +26,8 @@ def display_level_completion(console: Console, level_label, total_formatted, twe
     )
     if already:
         body += f"\n[dim #cadc9f]  • {len(already)} já aplicado(s) anteriormente[/dim #cadc9f]"
+    if applied or already:
+        body += f"\n[dim]  Para reverter: {REVERT_HINT}[/dim]"
     if skipped:
         reasons = ", ".join(sorted({r[2] for r in skipped if r[2]})) or "pulado"
         body += f"\n[warning]  • {len(skipped)} pulado(s) ({reasons})[/warning]"

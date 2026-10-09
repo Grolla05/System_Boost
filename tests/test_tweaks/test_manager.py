@@ -171,3 +171,47 @@ def test_reapply_raises_tweak_already_applied_subclass(monkeypatch, tmp_path):
 
     assert "boost undo" not in str(exc_info.value)
     assert "undo t1" in str(exc_info.value)
+
+
+# --- list_applied (feeds the menu's "desfazer ajustes" screen) ---------------
+
+def test_list_applied_empty_when_nothing_applied(monkeypatch, tmp_path):
+    _patch_catalog(monkeypatch, {"t1": StubTweak("t1")})
+
+    assert manager.list_applied(state_path=tmp_path / "state.json") == []
+
+
+def test_list_applied_returns_tweak_and_record_most_recent_first(monkeypatch, tmp_path):
+    state_path = tmp_path / "state.json"
+    t1, t2 = StubTweak("t1"), StubTweak("t2")
+    _patch_catalog(monkeypatch, {"t1": t1, "t2": t2})
+    manager.apply_tweak("t1", state_path=state_path)
+    manager.apply_tweak("t2", state_path=state_path)
+
+    applied = manager.list_applied(state_path=state_path)
+
+    assert [tweak.id for tweak, _ in applied] == ["t2", "t1"]
+    assert applied[0][0] is t2
+    assert applied[0][1]["previous_value"] == "before"
+
+
+def test_list_applied_does_not_touch_the_system(monkeypatch, tmp_path):
+    """Listing must only read the state file, never query/mutate Windows."""
+    state_path = tmp_path / "state.json"
+    t1 = StubTweak("t1")
+    _patch_catalog(monkeypatch, {"t1": t1})
+    manager.apply_tweak("t1", state_path=state_path)
+    t1.calls.clear()
+
+    manager.list_applied(state_path=state_path)
+
+    assert t1.calls == []
+
+
+def test_list_applied_skips_ids_missing_from_the_catalog(monkeypatch, tmp_path):
+    state_path = tmp_path / "state.json"
+    _patch_catalog(monkeypatch, {"old_tweak": StubTweak("old_tweak")})
+    manager.apply_tweak("old_tweak", state_path=state_path)
+    _patch_catalog(monkeypatch, {})  # tweak removed from the catalog in a later version
+
+    assert manager.list_applied(state_path=state_path) == []

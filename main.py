@@ -3,13 +3,17 @@ import sys
 
 from backend.privileges import is_admin
 from backend.cleaner import get_temp_paths, clean_directory, format_size
-from backend.tweaks import list_status, apply_tweak, undo_tweak, undo_all, TweakError
+from backend.tweaks import list_status, list_applied, apply_tweak, undo_tweak, undo_all, TweakError
 from backend import profiles
 from backend.logger import get_logger, setup_logging
 from backend.drivers import update_all_drivers
 from backend.hardware import get_machine_info
 from frontend.cli import (
     INFO_CHOICE,
+    UNDO_CHOICE,
+    show_undo_confirm,
+    show_undo_empty,
+    show_undo_results,
     show_machine_info,
     show_driver_update,
     format_driver_summary,
@@ -90,11 +94,32 @@ def _run_driver_step(args, dry_run=False):
     return format_driver_summary(results, reboot_required)
 
 
+def _run_undo_flow(args):
+    """Menu option 6: confirm, revert every applied tweak, show the result, return to the menu."""
+    applied = list_applied()
+    if not applied:
+        log.info("menu: desfazer — nenhum ajuste aplicado")
+        show_undo_empty(wait=not args.yes)
+        return
+    if not args.yes and not show_undo_confirm(applied, is_admin()):
+        log.info("menu: desfazer — usuário cancelou na confirmação")
+        return
+    log.info("menu: desfazendo %d ajuste(s)", len(applied))
+    try:
+        results = undo_all()
+    except Exception as exc:
+        log.exception("menu: desfazer — erro inesperado")
+        show_tweak_error(f"Erro inesperado ao desfazer ajustes: {exc}")
+        return
+    log.info("menu: desfazer — resultados=%s", results)
+    show_undo_results(results, wait=not args.yes)
+
+
 def cmd_menu(args):
     """Runs the guided flow: welcome -> level menu -> confirm -> execute -> completion.
 
-    The menu's last option shows the machine spec sheet and returns to the menu.
-    ESC on the completion screen loops back to the level menu; Enter (or -y) exits.
+    The menu's last two options show the machine spec sheet and revert applied tweaks; both
+    return to the menu. ESC on the completion screen loops back to the level menu; Enter (or -y) exits.
     """
     show_welcome(skip_wait=args.yes)
 
@@ -108,6 +133,9 @@ def cmd_menu(args):
                 with console.status("[accent]Lendo hardware...[/accent]"):
                     machine_info = get_machine_info()
             show_machine_info(machine_info, wait=True)
+            continue
+        if level_id == UNDO_CHOICE:
+            _run_undo_flow(args)
             continue
         log.info("menu: nível escolhido='%s'", level_id)
         clean_paths = profiles.resolve_clean_paths(level_id)
