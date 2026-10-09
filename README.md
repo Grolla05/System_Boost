@@ -7,6 +7,7 @@ A high-performance Windows CLI utility that cleans temporary files and applies r
 - **Guided optimization levels** — `python main.py` with no arguments walks you through 4 escalating levels (Leve/Mediana/Alta/Extrema), each bundling temp cleanup with a matching set of reversible tweaks, with a summary + confirmation before anything runs.
 - **Temp file cleanup** — User Temp, System Temp, and Prefetch, with dry-run mode and per-folder selection.
 - **Reversible Windows tweaks** — 7 built-in tweaks (power plan, hibernation, visual effects, telemetry, search indexing, SysMain, compatibility appraiser task). Every tweak reads and saves its current value before changing anything, and can be undone individually or all at once.
+- **Machine spec sheet** — `python main.py info` (or option 5 in the guided menu) shows Windows version/build, CPU, installed RAM, GPU(s), system-disk type (SSD/HDD) and notebook vs desktop. Read-only, no Administrator needed; anything that can't be read shows as "desconhecido".
 - **Rich terminal UI** — live progress bar during cleanup, a status table for tweaks, clear success/error panels.
 
 ## Requirements
@@ -40,6 +41,12 @@ python main.py clean --dry-run -y   # list pending drivers, install nothing
 python main.py menu --no-drivers    # guided flow without the driver step
 ```
 
+### Machine spec sheet
+
+```bash
+python main.py info     # Windows, CPU, RAM, GPU, system disk (SSD/HDD), notebook/desktop
+```
+
 ### Clean temp files directly
 
 ```bash
@@ -71,9 +78,18 @@ python build.py
 # output: dist/System Boost.exe
 ```
 
+The built exe **always asks for Administrator** (UAC prompt on every launch: the manifest is `requireAdministrator`), and carries `System Boost by Felipe Grolla` as its file description/company in Properties → Details. (`python main.py` from source is unaffected: run an elevated terminal yourself.)
+
+**About the UAC "Publisher" line:** Windows only shows a verified publisher name when the exe is Authenticode-signed with a certificate issued to that name. Unsigned, UAC says "Publisher: Unknown" (yellow shield) no matter what the metadata says. If you have a code-signing certificate in your Windows cert store, set its SHA-1 thumbprint and `build.py` signs the exe automatically (needs `signtool` from the Windows SDK):
+
+```powershell
+$env:SYSTEM_BOOST_SIGN_THUMBPRINT = "<thumbprint>"
+python build.py
+```
+
 ## Project structure
 
-- **`backend/`** — core logic, no UI: `cleaner.py`, `privileges.py`, `tweaks/` (the reversible-tweaks subsystem), `profiles.py` (the 4 guided-flow levels), `drivers.py` (Windows Update driver scan/install).
+- **`backend/`** — core logic, no UI: `cleaner.py`, `privileges.py`, `tweaks/` (the reversible-tweaks subsystem), `profiles.py` (the 4 guided-flow levels), `drivers.py` (Windows Update driver scan/install), `hardware.py` (machine spec sheet), `_powershell.py` (shared PowerShell runner).
 - **`frontend/`** — `rich`-based console UI: `cli.py` + `components/`.
 - **`tests/`** — pytest suite (`pytest -v`).
 - **`docs/funcionamento.md`** — full architecture walkthrough in Portuguese, with diagrams.

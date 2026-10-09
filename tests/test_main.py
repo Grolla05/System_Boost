@@ -31,6 +31,22 @@ def test_no_drivers_flag_on_menu_and_clean():
     assert parse_args(["clean", "--no-drivers"]).no_drivers is True
 
 
+def test_no_sound_flag_defaults_false():
+    assert parse_args(["menu"]).no_sound is False
+    assert parse_args(["clean"]).no_sound is False
+
+
+def test_no_sound_flag_on_menu_and_clean():
+    assert parse_args(["menu", "--no-sound"]).no_sound is True
+    assert parse_args(["clean", "--no-sound"]).no_sound is True
+
+
+def test_palette_flag_on_menu_and_clean():
+    assert parse_args(["menu", "-p", "arcade"]).palette == "arcade"
+    assert parse_args(["clean", "--palette", "matrix"]).palette == "matrix"
+    assert parse_args(["menu"]).palette is None
+
+
 def test_list_subcommand():
     args = parse_args(["list"])
     assert args.command == "list"
@@ -58,6 +74,31 @@ def test_undo_subcommand_with_all_flag():
 def test_undo_without_id_or_all_errors():
     with pytest.raises(SystemExit):
         parse_args(["undo"])
+
+
+def test_info_subcommand():
+    args = parse_args(["info"])
+    assert args.command == "info"
+
+
+def test_info_is_not_rerouted_to_clean():
+    import main
+
+    assert "info" in main.COMMANDS
+    assert "info" in main._DISPATCH
+
+
+def test_cmd_info_renders_machine_info(monkeypatch):
+    import main
+
+    sentinel = object()
+    shown = []
+    monkeypatch.setattr(main, "get_machine_info", lambda: sentinel)
+    monkeypatch.setattr(main, "show_machine_info", lambda info: shown.append(info))
+
+    main.cmd_info(main.parse_args(["info"]))
+
+    assert shown == [sentinel]
 
 
 def test_driver_step_survives_unexpected_error(monkeypatch):
