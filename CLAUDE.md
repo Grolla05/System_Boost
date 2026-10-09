@@ -31,10 +31,11 @@ Test suite (`pytest`) is configured via `pyproject.toml` (`testpaths = ["tests"]
 2 -> Com os testes escritos explore as opções e caminhos nos quais podem ser seguidos para o desenvolvimento
 3 -> Escreva o plano de ação para implementar a feature
 4 -> Desenvolva o plano proposto, dividindo a atividade do plano em task's
-5 -> Após o desenvolvimento execute os testes escritos no passo 1, para validar oque foi gerado, se não passar em algum teste, identifique oque deu problema e conserte e rode o teste novamente
+5 -> Após o desenvolvimento execute os testes escritos no passo 1 e o CI na pasta /.github na raiz do projeto, para validar oque foi gerado, se não passar em algum teste, identifique oque deu problema e conserte e rode o teste novamente
 6 -> Após ter ocorrido tudo corretamente por favor crie, edite caso já exista, o arquivo CHANGES.md na raiz do projeto, no qual este por sua vez deve documentar tudo nos mínimos detalhes do que foi feito
 7 -> Após ter ter documentado tudo no CHANGES.md prepare para gerar o commit, baseado nas alterações documentadas no CHANGES.md, ou seja deve ser feito baseado neste arquivo o commit mensage, mas espere a validação e comando do usuário
-8 -> Com a validação do usuário siga o processo de commit -> push (sync changes) -> Pull Request. Não é necessário abrir uma branch nova para cada feature, apenas utilize a branch Grolla para realizar este processo
+8 -> Com a validação do usuário siga o processo de commit -> push (sync changes) -> Pull Request. Não é necessário abrir uma branch nova para cada feature, apenas utilize a branch Grolla para realizar este processo.
+9 -> Após o commit feito por favor limpe o arquivo CHANGES.md, ou seja apague, o conteúdo dele.
 
 ---
 
@@ -89,6 +90,6 @@ The "System Boost" evolution has 6 more planned items beyond the reversible-twea
 | Disk cleanup evolution | `backend/disk_report.py` | Before/after diff over a `cleaner.get_temp_paths()`-style categorized dict |
 | Driver inventory | `backend/drivers.py` | `pnputil`/`wmic` subprocess inventory, export-only, no downloads |
 | Debloat/startup manager | `backend/startup.py` | Run/RunOnce + Startup folder enumeration via `winreg`/`os.scandir` |
-| Hardware detection | `backend/hardware.py` | Notebook/desktop, SSD/HDD, RAM — feeds a future `Tweak.applicable(hw)` filter |
+| ~~Hardware detection~~ | `backend/hardware.py` | Done — `main.py info` ("ficha da máquina"): Windows/build, CPU, RAM, GPU, SSD/HDD, notebook/desktop. `get_machine_info()` returns a `MachineInfo` that a future `Tweak.applicable(hw)` filter can consume. Reads via `winreg`/`ctypes` plus one PowerShell/CIM call (`backend/_powershell.py`); every field degrades to `None` independently |
 
 `main.py` stays the single wiring point for CLI dispatch until it crosses roughly 5-6 `cmd_*` functions with nontrivial per-command glue — past that point, split into a `cli/` package (`cli/clean.py`, `cli/tweaks.py`, `cli/__init__.py` with `main()`), keeping "backend has zero UI imports, frontend has zero business logic" intact.

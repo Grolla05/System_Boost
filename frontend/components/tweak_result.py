@@ -5,12 +5,12 @@ from rich.panel import Panel
 
 def display_tweak_success(console: Console, message):
     """Prints a success panel for a completed apply/undo action."""
-    console.print(Panel(f"[success]{message}[/success]", box=box.ROUNDED, border_style="success", expand=False))
+    console.print(Panel(f"[success]★ {message}[/success]", box=box.DOUBLE, border_style="bold #8bac0f", expand=False))
 
 
 def display_tweak_error(console: Console, message):
     """Prints an error panel when an apply/undo action fails."""
-    console.print(Panel(f"[danger]{message}[/danger]", box=box.ROUNDED, border_style="danger", expand=False))
+    console.print(Panel(f"[danger]✖ {message}[/danger]", box=box.DOUBLE, border_style="bold red", expand=False))
 
 
 def display_undo_all_results(console: Console, results):

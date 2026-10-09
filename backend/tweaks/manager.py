@@ -66,6 +66,22 @@ def undo_all(state_path=None):
     return results
 
 
+def list_applied(state_path=None):
+    """Returns (tweak, record) for every applied tweak, most recently applied first.
+
+    Reads only the state file (no queries to Windows). Ids no longer in the catalog are skipped.
+    """
+    applied = []
+    for record in state_store.list_applied(path=state_path):
+        try:
+            tweak = catalog.get_tweak(record["tweak_id"])
+        except TweakError:
+            log.warning("list_applied: '%s' consta no state file mas não está no catálogo", record["tweak_id"])
+            continue
+        applied.append((tweak, record))
+    return applied
+
+
 def list_status(state_path=None):
     """Returns (tweak, current_value, applied_record) for every tweak in the catalog."""
     statuses = []
