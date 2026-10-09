@@ -62,17 +62,18 @@ def test_arrow_down_four_times_reaches_info_option():
         assert level_menu.display_level_menu(console) == level_menu.INFO_CHOICE
 
 
-def test_arrow_up_from_first_wraps_to_info_option():
+def test_arrow_up_twice_from_first_reaches_info_option():
+    # info is the second-to-last option; the last one (undo) is covered in test_undo_option.py
     _, console = _console()
 
-    with patch("frontend.components.level_menu._read_menu_key", side_effect=["up", "enter"]):
+    with patch("frontend.components.level_menu._read_menu_key", side_effect=["up", "up", "enter"]):
         assert level_menu.display_level_menu(console) == level_menu.INFO_CHOICE
 
 
-def test_arrow_down_five_times_wraps_back_to_first_level():
+def test_arrow_down_six_times_wraps_back_to_first_level():
     _, console = _console()
 
-    keys = ["down"] * 5 + ["enter"]
+    keys = ["down"] * 6 + ["enter"]
     with patch("frontend.components.level_menu._read_menu_key", side_effect=keys):
         assert level_menu.display_level_menu(console) == "leve"
 

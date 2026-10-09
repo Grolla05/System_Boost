@@ -6,7 +6,8 @@ from .components.loading import run_cleanup_with_loading
 from .components.completion import display_completion_screen
 from .components.tweak_list import display_tweak_list
 from .components.tweak_result import display_tweak_success, display_tweak_error, display_undo_all_results
-from .components.level_menu import display_level_menu, display_level_summary, INFO_CHOICE
+from .components.level_menu import display_level_menu, display_level_summary, INFO_CHOICE, UNDO_CHOICE
+from .components.undo_menu import display_undo_confirm, display_undo_empty, display_undo_results
 from .components.level_completion import display_level_completion
 from .components.driver_progress import run_driver_update_with_progress, format_driver_summary
 from .components.machine_info import display_machine_info
@@ -73,6 +74,15 @@ def show_tweak_error(message):
 
 def show_undo_all_results(results):
     display_undo_all_results(console, results)
+
+def show_undo_confirm(applied, admin):
+    return display_undo_confirm(console, applied, admin)
+
+def show_undo_empty(wait=True):
+    display_undo_empty(console, wait=wait)
+
+def show_undo_results(results, wait=True):
+    display_undo_results(console, results, wait=wait)
 
 def show_machine_info(info, wait=False):
     display_machine_info(console, info, wait=wait)

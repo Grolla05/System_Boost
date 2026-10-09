@@ -92,6 +92,11 @@ Define a paleta de cores padrão monocromática com destaque azul (`accent`):
 #### 📄 `frontend/components/machine_info.py`
 *   `display_machine_info(console, info)`: tabela "A ficha da máquina" com Windows, Processador, Memória, Placa de vídeo (uma linha por GPU), Disco do sistema e Tipo. Campos vazios aparecem como `desconhecido`.
 
+#### 📄 `frontend/components/undo_menu.py`
+*   `display_undo_confirm(console, applied, admin)`: lista os ajustes que serão revertidos, avisa os que exigem Administrador quando a sessão não está elevada e pergunta "Reverter agora?".
+*   `display_undo_empty(console, wait)`: "Nenhum ajuste aplicado".
+*   `display_undo_results(console, results, wait)`: OK/FALHA por ajuste e o total desfeito.
+
 #### 📄 `frontend/components/completion.py`
 *   Exibe uma caixa de sucesso verde arredondada contendo o total limpo.
 *   Aguarda o input do usuário para sair.
@@ -259,6 +264,8 @@ sequenceDiagram
 ## 🧭 Fluxo Guiado (`menu`) — comportamento padrão
 
 Quando `python main.py` é executado sem argumentos, o subcomando `menu` é implícito e apresenta um fluxo guiado por 4 telas.
+
+> **Opção 6 do menu — "Desfazer ajustes":** lista os ajustes aplicados (`manager.list_applied()`, lido do state file), pede confirmação, chama `undo_all()` e mostra OK/FALHA por ajuste, voltando ao menu. Sem Administrador, os ajustes que exigem admin aparecem como falha com o motivo. A tela de conclusão e o briefing de cada nível informam esse caminho (`REVERT_HINT`).
 
 > **Opção 5 do menu — "Ver ficha da máquina":** além dos 4 níveis, o menu tem uma quinta opção que mostra a ficha (`backend/hardware.py`), espera uma tecla e volta ao menu, sem passar pelo resumo nem executar nada. O hardware é lido uma única vez por sessão (`display_level_menu` devolve `INFO_CHOICE` e `cmd_menu` guarda o resultado).
 

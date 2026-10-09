@@ -4,6 +4,7 @@ from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, IntPrompt
+from rich.text import Text
 
 from backend.profiles import LEVEL_ORDER, LEVELS
 from backend.tweaks import catalog as tweaks_catalog
@@ -12,7 +13,10 @@ from ._terminal import clear_screen, flush_input
 
 # Returned by display_level_menu instead of a level id when the user picks "ver ficha da máquina".
 INFO_CHOICE = "info"
-_OPTIONS = tuple(LEVEL_ORDER) + (INFO_CHOICE,)
+# Returned when the user picks "desfazer ajustes" (reverts every applied tweak).
+UNDO_CHOICE = "undo"
+_OPTIONS = tuple(LEVEL_ORDER) + (INFO_CHOICE, UNDO_CHOICE)
+REVERT_HINT = "opção 6 do menu ou `python main.py undo --all`"
 _DIGIT_KEYS = tuple(str(i) for i in range(1, len(_OPTIONS) + 1))
 
 
@@ -25,7 +29,7 @@ def _is_interactive_terminal() -> bool:
 
 
 def _read_menu_key() -> str:
-    """Reads a single key for menu navigation (up, down, enter, esc, or 1-5)."""
+    """Reads a single key for menu navigation (up, down, enter, esc, p, or a 1-6 option number)."""
     flush_input()
     if os.name == "nt":
         import msvcrt
@@ -108,16 +112,28 @@ def _render_menu_panel(selected_idx: int) -> Panel:
             lines.append(f"    [dim]{level['description']}[/dim]")
         lines.append("")
 
-    info_idx = len(LEVEL_ORDER)
-    info_num = info_idx + 1
-    if selected_idx == info_idx:
-        lines.append(f"[bold success]► [{info_num}] VER FICHA DA MÁQUINA[/bold success]")
-        lines.append("    [bold warning]Windows, CPU, RAM, GPU, disco e tipo (notebook/desktop)[/bold warning]")
-    else:
-        lines.append(f"  [dim] [{info_num}] VER FICHA DA MÁQUINA[/dim]")
-        lines.append("    [dim]Windows, CPU, RAM, GPU, disco e tipo (notebook/desktop)[/dim]")
+    extras = [
+        ("VER FICHA DA MÁQUINA", "Windows, CPU, RAM, GPU, disco e tipo (notebook/desktop)"),
+        ("DESFAZER AJUSTES", "Restaura o valor original de cada ajuste já aplicado"),
+    ]
+    for offset, (title, description) in enumerate(extras):
+        idx = len(LEVEL_ORDER) + offset
+        num = idx + 1
+        if selected_idx == idx:
+            lines.append(f"[bold success]► [{num}] {title}[/bold success]")
+            lines.append(f"    [bold warning]{description}[/bold warning]")
+        else:
+            lines.append(f"  [dim] [{num}] {title}[/dim]")
+            lines.append(f"    [dim]{description}[/dim]")
+        if offset < len(extras) - 1:
+            lines.append("")
 
-    subtitle = f"[bold accent][↑/↓] Navegar  [1-5] Direto  [P] Tema: {pal_name}  [ENTER] Confirmar[/bold accent]"
+    subtitle = (
+        f"[bold accent][↑/↓] Navegar  [1-{len(_OPTIONS)}] Direto  "
+        f"[P] Tema: {pal_name}  [ENTER] Confirmar[/bold accent]"
+    )
+    # Wide enough for the legend: palettes with long names would otherwise get it cropped.
+    subtitle_width = Text.from_markup(subtitle).cell_len + 6
     return Panel(
         "\n".join(lines),
         title="[bold accent]╔═ SELECT OPTIMIZATION STAGE ═╗[/bold accent]",
@@ -126,13 +142,14 @@ def _render_menu_panel(selected_idx: int) -> Panel:
         border_style="accent",
         padding=(1, 3),
         expand=False,
+        width=max(79, subtitle_width),
     )
 
 
 def display_level_menu(console: Console):
-    """Shows the 4 optimization levels plus 'ver ficha' with arrow / number key navigation.
+    """Shows the 4 levels plus 'ver ficha' and 'desfazer ajustes' with arrow / number key navigation.
 
-    Returns the chosen level id, or INFO_CHOICE when the user asks for the machine spec sheet.
+    Returns the chosen level id, INFO_CHOICE (machine spec sheet) or UNDO_CHOICE (revert tweaks).
     """
     if not _is_interactive_terminal():
         clear_screen(console)
@@ -203,6 +220,9 @@ def display_level_summary(console: Console, level_id, clean_paths, applicable_id
         lines.append(f"  [bold warning]⚡ {tweaks_catalog.get_tweak(tweak_id).label}[/bold warning]")
     if not applicable_ids:
         lines.append("  [dim](nenhum)[/dim]")
+    else:
+        lines.append("")
+        lines.append(f"[dim]Reversível: {REVERT_HINT}[/dim]")
 
     if skipped_ids:
         lines.append("")

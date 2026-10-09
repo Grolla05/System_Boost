@@ -59,6 +59,8 @@ Run the terminal as **Administrator** to also clean `C:\Windows\Temp` and `C:\Wi
 
 ### Reversible tweaks
 
+From the guided menu, option **6 — Desfazer ajustes** lists every applied tweak, asks for confirmation and restores each original value. The same is available from the command line:
+
 ```bash
 python main.py list                # show all tweaks + current/applied state
 python main.py apply <tweak_id>     # apply a tweak, saving its previous value
