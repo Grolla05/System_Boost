@@ -98,12 +98,13 @@ def install_driver(update_id):
     return False, reboot, f"falha na instalação (código {code})"
 
 
-def update_all_drivers(progress_callback=None, on_scan=None, dry_run=False):
+def update_all_drivers(progress_callback=None, on_scan=None, dry_run=False, on_result=None):
     """Scans devices and updates drivers one at a time.
 
     Returns (results, reboot_required); results is a list of (title, status, note)
     where status is True (updated), False (failed) or None (skipped / dry-run).
-    One failing driver never aborts the rest.
+    One failing driver never aborts the rest. on_result(title, status, note), if given, is
+    called as soon as each driver finishes (after the install attempt).
     """
     log.info("drivers: iniciando (dry_run=%s)", dry_run)
     if not is_admin():
@@ -128,14 +129,20 @@ def update_all_drivers(progress_callback=None, on_scan=None, dry_run=False):
             progress_callback(title)
         if dry_run:
             results.append((title, None, "dry-run"))
+            if on_result:
+                on_result(title, None, "dry-run")
             continue
         try:
             ok, reboot, note = install_driver(item.get("update_id"))
         except DriverError as exc:
             log.error("drivers: '%s' falhou: %s", title, exc)
             results.append((title, False, str(exc)))
+            if on_result:
+                on_result(title, False, str(exc))
             continue
         log.info("drivers: '%s' ok=%s reboot=%s nota=%s", title, ok, reboot, note)
         reboot_required = reboot_required or reboot
         results.append((title, ok, note))
+        if on_result:
+            on_result(title, ok, note)
     return results, reboot_required

@@ -19,6 +19,7 @@ def display_tweak_list(console: Console, statuses):
     for tweak, current_value, record in statuses:
         admin_marker = "[warning]sim[/warning]" if tweak.requires_admin else "não"
         status = "[success]aplicado[/success]" if record else "[dim]—[/dim]"
-        table.add_row(tweak.id, tweak.label, admin_marker, str(current_value), status)
+        shown = f"{len(current_value)} item(ns)" if isinstance(current_value, list) else str(current_value)
+        table.add_row(tweak.id, tweak.label, admin_marker, shown, status)
 
     console.print(table)

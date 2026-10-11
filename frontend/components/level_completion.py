@@ -9,10 +9,13 @@ from .level_menu import REVERT_HINT
 from ..audio import play_victory
 
 
-def display_level_completion(console: Console, level_label, total_formatted, tweak_results, close_terminal=True, skip_wait=False, driver_summary=None):
+def display_level_completion(console: Console, level_label, total_formatted, tweak_results, close_terminal=True, skip_wait=False, driver_summary=None, clear=True):
     """Shows the combined cleanup + tweaks summary in 8-bit Game Boy style; returns 'back' or 'exit'."""
-    clear_screen(console)
-    console.print("\n" * max(1, (console.height // 5)))
+    if clear:
+        clear_screen(console)
+        console.print("\n" * max(1, (console.height // 5)))
+    else:
+        console.print()  # keep the mission log above visible
 
     applied = [r for r in tweak_results if r[1] is True]
     already = [r for r in tweak_results if r[1] == "already"]

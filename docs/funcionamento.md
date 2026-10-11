@@ -305,9 +305,9 @@ Na tela de conclusão (passo 4), **Enter** (ou qualquer tecla além de ESC) ence
 
 | Nível | Pastas limpas | Ajustes aplicados |
 |---|---|---|
-| Leve | User Temp | `visual_effects` |
-| Mediana | + System Temp | + `power_plan` |
-| Alta | + Prefetch | + `hibernation`, `indexing` |
+| Leve | User Temp | `startup_apps`, `third_party_services`, `third_party_tasks` |
+| Mediana | + System Temp | + `power_plan`, `recommendations_offers`, `mouse_acceleration` |
+| Alta | + Prefetch | + `visual_effects`, `hibernation`, `indexing` |
 | Extrema | (mesmas de Alta) | + `telemetry`, `sysmain`, `compat_appraiser` |
 
 Cada nível é só uma lista declarativa de pastas + ids de ajustes em `profiles.LEVELS` — nenhuma lógica nova de limpeza ou de ajuste é criada; `resolve_clean_paths()` reaproveita `cleaner.get_temp_paths()` e o mesmo filtro por admin que `cmd_clean` já tinha, e `apply_level_tweaks()` reaproveita `tweaks.manager.apply_tweak()` ajuste por ajuste.

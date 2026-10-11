@@ -7,10 +7,13 @@ from ._terminal import clear_screen, wait_for_keypress_and_maybe_close
 
 from ..audio import play_victory
 
-def display_completion_screen(console: Console, total_formatted, dry_run=False, close_terminal=True, skip_wait=False, driver_summary=None):
+def display_completion_screen(console: Console, total_formatted, dry_run=False, close_terminal=True, skip_wait=False, driver_summary=None, clear=True):
     """Displays the final screen with the amount of space freed in 8-bit Game Boy style."""
-    clear_screen(console)
-    console.print("\n" * max(1, (console.height // 5)))
+    if clear:
+        clear_screen(console)
+        console.print("\n" * max(1, (console.height // 5)))
+    else:
+        console.print()  # keep the mission log above visible
 
     title = "SIMULAÇÃO CONCLUÍDA" if dry_run else "LIMPEZA CONCLUÍDA"
     verb = "seriam limpos" if dry_run else "foram limpos"

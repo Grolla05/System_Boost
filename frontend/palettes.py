@@ -54,39 +54,9 @@ PALETTES = {
         "highlight": "bold #ffe600",
         "shadow": "#2e0854",
     },
-    "amber": {
-        "name": "Phosphor Amber CRT",
-        "info": "bold #ffaa00",
-        "warning": "bold #ffd480",
-        "danger": "bold red",
-        "success": "bold #ff9900",
-        "accent": "bold #ff9900",
-        "header": "bold #1a0f00 on #ff9900",
-        "dim": "#663d00",
-        "border": "bold #ff9900",
-        "bar_complete": "bold #ffb833",
-        "bar_remaining": "#472a00",
-        "highlight": "bold #ffe066",
-        "shadow": "#331f00",
-    },
-    "matrix": {
-        "name": "Matrix Terminal",
-        "info": "bold #00dd33",
-        "warning": "bold #99ff99",
-        "danger": "bold red",
-        "success": "bold #00ff41",
-        "accent": "bold #00ff41",
-        "header": "bold #002200 on #00ff41",
-        "dim": "#004d1a",
-        "border": "bold #00ff41",
-        "bar_complete": "bold #00ff41",
-        "bar_remaining": "#003311",
-        "highlight": "bold #b3ffcc",
-        "shadow": "#002b0e",
-    },
 }
 
-PALETTE_ORDER = ("dmg", "pocket", "arcade", "amber", "matrix")
+PALETTE_ORDER = ("dmg", "pocket", "arcade")
 _CURRENT_PALETTE = "dmg"
 
 
