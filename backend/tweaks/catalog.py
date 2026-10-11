@@ -10,6 +10,11 @@ from .services import ServiceStateTweak
 from .scheduled_tasks import ScheduledTaskTweak
 from .power_plan import PowerPlanTweak
 from .hibernation import HibernationTweak
+from .startup_apps import StartupAppsTweak
+from .recommendations_offers import RecommendationsOffersTweak
+from .mouse_acceleration import MouseAccelerationTweak
+from .third_party_services import ThirdPartyServicesTweak
+from .third_party_tasks import ThirdPartyTasksTweak
 
 _VISUAL_EFFECTS_KEY = "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects"
 _TELEMETRY_KEY = "SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection"
@@ -23,6 +28,11 @@ def _build_catalog():
     return {
         "power_plan": PowerPlanTweak(),
         "hibernation": HibernationTweak(),
+        "recommendations_offers": RecommendationsOffersTweak(),
+        "mouse_acceleration": MouseAccelerationTweak(),
+        "startup_apps": StartupAppsTweak(),
+        "third_party_services": ThirdPartyServicesTweak(),
+        "third_party_tasks": ThirdPartyTasksTweak(),
         "visual_effects": RegistryValueTweak(
             tweak_id="visual_effects",
             label="Efeitos visuais: melhor desempenho",

@@ -43,7 +43,7 @@ def test_no_sound_flag_on_menu_and_clean():
 
 def test_palette_flag_on_menu_and_clean():
     assert parse_args(["menu", "-p", "arcade"]).palette == "arcade"
-    assert parse_args(["clean", "--palette", "matrix"]).palette == "matrix"
+    assert parse_args(["clean", "--palette", "arcade"]).palette == "arcade"
     assert parse_args(["menu"]).palette is None
 
 
@@ -132,3 +132,86 @@ def test_run_guarded_waits_for_key_on_crash(monkeypatch, capsys):
     assert exc.value.code == 1
     assert waited == [True]
     assert "kaboom" in capsys.readouterr().err
+
+
+class _FakeLog:
+    def __init__(self):
+        self.calls = []
+
+    def start(self, key, text):
+        self.calls.append(("start", key, text))
+
+    def finish(self, key, status, note=None, text=None):
+        self.calls.append(("finish", key, status, note))
+
+    def item(self, text, status="ok", note=None):
+        self.calls.append(("item", text, status))
+
+    def is_running(self, key):
+        return any(c[0] == "start" and c[1] == key for c in self.calls) and not any(
+            c[0] == "finish" and c[1] == key for c in self.calls)
+
+
+def test_driver_step_with_log_reports_each_driver(monkeypatch):
+    import main
+
+    def fake_update(progress_callback=None, on_scan=None, dry_run=False, on_result=None):
+        on_scan(2)
+        progress_callback("Driver A")
+        on_result("Driver A", True, None)
+        progress_callback("Driver B")
+        on_result("Driver B", False, "falhou")
+        return [("Driver A", True, None), ("Driver B", False, "falhou")], False
+
+    monkeypatch.setattr(main, "update_all_drivers", fake_update)
+    mlog = _FakeLog()
+
+    summary = main._run_driver_step(main.parse_args(["menu"]), mlog=mlog)
+
+    finished = {c[1]: c[2] for c in mlog.calls if c[0] == "finish"}
+    assert finished["driver:Driver A"] == "ok"
+    assert finished["driver:Driver B"] == "fail"
+    assert finished["drivers"] == "ok"
+    assert "1 driver(s) atualizado(s)" in summary
+
+
+def test_driver_step_with_log_closes_scan_line_when_skipped(monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "update_all_drivers",
+                        lambda **k: ([("Drivers", None, "requer administrador")], False))
+    mlog = _FakeLog()
+
+    main._run_driver_step(main.parse_args(["menu"]), mlog=mlog)
+
+    assert ("finish", "drivers", "skip", "requer administrador") in mlog.calls
+
+
+def test_driver_step_with_log_marks_scan_line_failed_on_crash(monkeypatch):
+    import main
+
+    def boom(**k):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(main, "update_all_drivers", boom)
+    mlog = _FakeLog()
+
+    summary = main._run_driver_step(main.parse_args(["menu"]), mlog=mlog)
+
+    assert "kaboom" in summary
+    assert any(c[:3] == ("finish", "drivers", "fail") for c in mlog.calls)
+
+
+def test_clean_with_log_reports_each_folder(monkeypatch, tmp_path):
+    import main
+
+    mlog = _FakeLog()
+    sizes = {"User Temp": 1024, "System Temp": 2048}
+    monkeypatch.setattr(main, "clean_directory", lambda path, cb, dry_run=False: sizes[path])
+
+    total_formatted, total_bytes = main._clean_with_log(mlog, {"User Temp": "User Temp", "System Temp": "System Temp"}, dry_run=False)
+
+    assert total_bytes == 3072
+    assert total_formatted == main.format_size(3072)
+    assert [c[:3] for c in mlog.calls if c[0] == "finish"] == [
+        ("finish", "clean:User Temp", "ok"), ("finish", "clean:System Temp", "ok")]

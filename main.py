@@ -2,6 +2,7 @@ import argparse
 import sys
 
 from backend.privileges import is_admin
+from backend.tweaks.catalog import get_tweak
 from backend.cleaner import get_temp_paths, clean_directory, format_size
 from backend.tweaks import list_status, list_applied, apply_tweak, undo_tweak, undo_all, TweakError
 from backend import profiles
@@ -19,7 +20,7 @@ from frontend.cli import (
     format_driver_summary,
     console,
     show_welcome,
-    show_loading,
+    show_mission_log,
     show_completion,
     show_tweak_list,
     show_tweak_success,
@@ -52,7 +53,7 @@ def parse_args(argv=None):
     menu_parser.add_argument("-y", "--yes", action="store_true", help="Pula confirmações (uso automatizado)")
     menu_parser.add_argument("--no-drivers", action="store_true", help="Não atualiza drivers ao final")
     menu_parser.add_argument("--no-sound", action="store_true", help="Desativa efeitos sonoros retrô 8-bit")
-    menu_parser.add_argument("-p", "--palette", choices=("dmg", "pocket", "arcade", "amber", "matrix"), help="Escolhe a paleta de cores retrô")
+    menu_parser.add_argument("-p", "--palette", choices=("dmg", "pocket", "arcade"), help="Escolhe a paleta de cores retrô")
 
     clean_parser = subparsers.add_parser("clean", help="Limpa arquivos temporários do Windows")
     clean_parser.add_argument("-n", "--dry-run", action="store_true", help="Simula a limpeza sem apagar nada")
@@ -61,7 +62,7 @@ def parse_args(argv=None):
     clean_parser.add_argument("--no-close", action="store_true", help="Não fecha o terminal ao final")
     clean_parser.add_argument("--no-drivers", action="store_true", help="Não atualiza drivers ao final")
     clean_parser.add_argument("--no-sound", action="store_true", help="Desativa efeitos sonoros retrô 8-bit")
-    clean_parser.add_argument("-p", "--palette", choices=("dmg", "pocket", "arcade", "amber", "matrix"), help="Escolhe a paleta de cores retrô")
+    clean_parser.add_argument("-p", "--palette", choices=("dmg", "pocket", "arcade"), help="Escolhe a paleta de cores retrô")
 
     subparsers.add_parser("info", help="Mostra a ficha da máquina (Windows, CPU, RAM, GPU, disco, tipo)")
 
@@ -80,18 +81,87 @@ def parse_args(argv=None):
     return args
 
 
-def _run_driver_step(args, dry_run=False):
-    """Final step of menu/clean: scan devices and update drivers via Windows Update."""
+_LOG_STATUS = {True: "ok", False: "fail", None: "skip", "already": "already"}
+
+
+def _tweak_label(tweak_id):
+    try:
+        return get_tweak(tweak_id).label
+    except TweakError:
+        return tweak_id
+
+
+def _tweak_event_handler(mlog):
+    """Adapts profiles.apply_level_tweaks events to mission-log lines."""
+    def handle(tweak_id, status, note):
+        if status == "running":
+            mlog.start(tweak_id, _tweak_label(tweak_id))
+        elif status == "item":
+            mlog.item(note)
+        else:
+            mlog.finish(tweak_id, _LOG_STATUS[status], note, text=_tweak_label(tweak_id))
+    return handle
+
+
+def _clean_with_log(mlog, paths, dry_run=False):
+    """Cleans each folder, logging one line per folder. Returns (total_formatted, total_bytes)."""
+    total = 0
+    for name, path in paths.items():
+        key = f"clean:{name}"
+        mlog.start(key, f"{'Analisando' if dry_run else 'Limpando'} {name}")
+        try:
+            freed = clean_directory(path, lambda n: None, dry_run=dry_run)
+        except Exception as exc:
+            log.exception("limpeza '%s': erro inesperado", name)
+            mlog.finish(key, "fail", str(exc))
+            continue
+        total += freed
+        mlog.finish(key, "ok", f"{format_size(freed)} {'seriam liberados' if dry_run else 'liberados'}")
+    return format_size(total), total
+
+
+def _run_driver_step(args, dry_run=False, mlog=None):
+    """Final step of menu/clean: scan devices and update drivers via Windows Update.
+
+    With mlog, progress is written to the mission log instead of a progress bar.
+    """
     if args.no_drivers:
         log.info("etapa drivers: ignorada (--no-drivers)")
         return None
     log.info("etapa drivers: iniciando")
     try:
-        results, reboot_required = show_driver_update(update_all_drivers, dry_run=dry_run)
+        if mlog is None:
+            results, reboot_required = show_driver_update(update_all_drivers, dry_run=dry_run)
+        else:
+            results, reboot_required = _update_drivers_logged(mlog, dry_run)
     except Exception as exc:
         log.exception("etapa drivers: erro inesperado")
+        if mlog is not None and mlog.is_running("drivers"):
+            mlog.finish("drivers", "fail", str(exc))
         return f"[danger]Drivers: erro inesperado: {exc}[/danger]"
     return format_driver_summary(results, reboot_required)
+
+
+def _update_drivers_logged(mlog, dry_run):
+    """Runs update_all_drivers writing one mission-log line per driver."""
+    mlog.start("drivers", "Drivers: buscando no Windows Update")
+
+    def on_scan(total):
+        mlog.finish("drivers", "ok", f"{total} pendente(s)" if total else "nenhuma atualização pendente")
+
+    def on_item(title):
+        mlog.start(f"driver:{title}", f"Atualizando: {title[:60]}")
+
+    def on_result(title, status, note):
+        mlog.finish(f"driver:{title}", _LOG_STATUS[status], note)
+
+    results, reboot_required = update_all_drivers(
+        progress_callback=on_item, on_scan=on_scan, dry_run=dry_run, on_result=on_result,
+    )
+    if mlog.is_running("drivers"):  # skipped (no admin) or scan failed: no callbacks fired
+        _, status, note = results[0]
+        mlog.finish("drivers", _LOG_STATUS[status], note)
+    return results, reboot_required
 
 
 def _run_undo_flow(args):
@@ -147,17 +217,16 @@ def cmd_menu(args):
                 log.info("menu: usuário cancelou na confirmação")
                 return
 
-        log.info("etapa limpeza: iniciando")
-        results, total_formatted, total_bytes = show_loading(
-            clean_paths, clean_directory, format_size, dry_run=False
-        )
-        log.info("etapa limpeza: concluída, total liberado=%s", total_formatted)
-        log.info("etapa ajustes: iniciando")
-        tweak_results = profiles.apply_level_tweaks(level_id)
-        log.info("etapa ajustes: resultados=%s", tweak_results)
-        driver_summary = _run_driver_step(args)
-
         level_label = profiles.LEVELS[level_id]["label"]
+        with show_mission_log(f"STAGE: {level_label.upper()}") as mlog:
+            log.info("etapa limpeza: iniciando")
+            total_formatted, total_bytes = _clean_with_log(mlog, clean_paths)
+            log.info("etapa limpeza: concluída, total liberado=%s", total_formatted)
+            log.info("etapa ajustes: iniciando")
+            tweak_results = profiles.apply_level_tweaks(level_id, on_event=_tweak_event_handler(mlog))
+            log.info("etapa ajustes: resultados=%s", tweak_results)
+            driver_summary = _run_driver_step(args, mlog=mlog)
+
         outcome = show_level_completion(
             level_label, total_formatted, tweak_results,
             close_terminal=not args.yes, skip_wait=args.yes, driver_summary=driver_summary,
@@ -187,11 +256,10 @@ def cmd_clean(args):
             "mas isso pode afetar o próximo boot.[/warning]"
         )
 
-    results, total_formatted, total_bytes = show_loading(
-        paths_to_clean, clean_directory, format_size, dry_run=args.dry_run
-    )
-
-    driver_summary = _run_driver_step(args, dry_run=args.dry_run)
+    title = "SIMULAÇÃO" if args.dry_run else "LIMPEZA"
+    with show_mission_log(title) as mlog:
+        total_formatted, total_bytes = _clean_with_log(mlog, paths_to_clean, dry_run=args.dry_run)
+        driver_summary = _run_driver_step(args, dry_run=args.dry_run, mlog=mlog)
 
     close_terminal = not (args.no_close or args.dry_run or args.yes)
     show_completion(
