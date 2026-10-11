@@ -1,8 +1,15 @@
 import os
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
-
+from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, ProgressColumn
+from rich.text import Text
+from .retro_sprite import get_sprite_frame
 from ._terminal import clear_screen
+
+class RetroSpriteColumn(ProgressColumn):
+    """Animates an 8-bit sprite based on processed item count."""
+    def render(self, task):
+        frame = get_sprite_frame(int(task.completed))
+        return Text(f"[{frame}]", style="bold success")
 
 def run_cleanup_with_loading(console: Console, paths, clean_func, format_func, dry_run=False):
     """Executes the cleanup process with a unified loading screen."""
@@ -20,11 +27,14 @@ def run_cleanup_with_loading(console: Console, paths, clean_func, format_func, d
     results = []
     total_freed = 0
     
+    console.print("[bold accent]╔═[ PURGING UNNECESSARY SECTORS ]═╗[/bold accent]\n")
+
     with Progress(
-        SpinnerColumn(spinner_name="dots"),
-        TextColumn("[accent]{task.description}"),
-        BarColumn(bar_width=40, style="accent", complete_style="accent"),
-        TaskProgressColumn(),
+        RetroSpriteColumn(),
+        TextColumn("[bold accent]ENERGY:[bold accent]"),
+        BarColumn(bar_width=32, style="dim", complete_style="success"),
+        TaskProgressColumn(text_format="[bold warning]{task.percentage:>3.0f}%[/bold warning]"),
+        TextColumn("[dim]► {task.description}[/dim]"),
         console=console,
         transient=True
     ) as progress:

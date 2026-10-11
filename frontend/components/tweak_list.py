@@ -1,10 +1,15 @@
+from rich import box
 from rich.console import Console
 from rich.table import Table
 
 
 def display_tweak_list(console: Console, statuses):
     """Prints a table of tweaks with id, label, admin requirement, current value, and applied status."""
-    table = Table(title="Ajustes disponíveis")
+    table = Table(
+        title="[bold #9bbc0f]╔═ AJUSTES DISPONÍVEIS // TWEAKS INVENTORY ═╗[/bold #9bbc0f]",
+        box=box.DOUBLE,
+        border_style="bold #8bac0f",
+    )
     table.add_column("ID", style="accent")
     table.add_column("Ajuste")
     table.add_column("Admin", justify="center")
