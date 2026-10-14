@@ -97,3 +97,8 @@ Cada um é um tweak agregado por categoria: `previous_value` guarda a lista (JSO
 - Validação executada: `pytest -v` — 370 testes passaram no Python 3.12.10.
 - O workflow em `.github/workflows/ci.yml` instala `requirements.txt` e executa `pytest -v`; a suíte equivalente passou localmente. O workflow remoto não foi disparado.
 - Inno Setup 6.7.3 foi instalado e o fluxo de build compilou `dist/System Boost Setup.exe` com sucesso. O teste automatizado de instalação real do programa não foi executado.
+
+## Correção da falha de CI
+
+- O teste de localização do Inno Setup por usuário falhava em runners que também tinham uma instalação global. O resolver prioriza corretamente %ProgramFiles(x86)%; o teste agora aponta esse caminho para uma pasta temporária inexistente e valida o fallback de %LOCALAPPDATA% de forma determinística.
+- Validação local: pytest -v — 370 testes passaram.
