@@ -72,3 +72,28 @@ Cada um é um tweak agregado por categoria: `previous_value` guarda a lista (JSO
 - Quem já aplicou `visual_effects` antes continua com o ajuste registrado e reversível em "Desfazer ajustes".
 - `docs/funcionamento.md`: tabela dos níveis atualizada.
 - Testes: `tests/test_profiles.py` (ordem dos stages, testes que usavam `visual_effects` no Stage 1 passaram a usar `startup_apps`/`power_plan`, novo `test_visual_effects_only_from_alta_onwards`). `pytest -v`: 362 passed.
+
+# Alterações — instalador do System Boost
+
+## Fluxo de build e empacotamento
+
+- Adicionado `installer.py` como comando local no Windows. Por padrão, ele localiza o compilador Inno Setup 6, executa `build.py` para instalar as dependências de build e gerar o executável standalone, então compila o instalador.
+- O build chama PyInstaller pelo mesmo interpretador Python (`python -m PyInstaller`) que instalou `requirements.txt`, evitando coletar bibliotecas que existam apenas em outra instalação Python da máquina.
+- Adicionado suporte a `INNO_SETUP_COMPILER` para configurar um caminho personalizado para `ISCC.exe`; também são pesquisados o `PATH`, os diretórios convencionais do Inno Setup 6 e a pasta de instalação por usuário em `%LOCALAPPDATA%`. A ausência do compilador e de arquivos de entrada produz mensagens de erro específicas.
+- Adicionada a opção `python installer.py --skip-build` para empacotar um `dist/System Boost.exe` já existente.
+- O comando gera `dist/System Boost Setup.exe`, usando a versão declarada em `pyproject.toml`. O instalador inclui somente o executável standalone: Python e dependências Python ficam incorporados pelo PyInstaller e não são exigidos na máquina de destino.
+
+## Configuração do instalador
+
+- Adicionado `installer.iss` para gerar pacote Inno Setup com instalação por usuário em `%LOCALAPPDATA%\Programs\System Boost`, atalhos no menu Iniciar, desinstalação registrada no Windows e opção para iniciar o aplicativo após a instalação.
+- O Setup oferece mensagens em português brasileiro e inglês. A elevação UAC continua sendo solicitada ao iniciar o aplicativo, conforme o manifesto `requireAdministrator` já aplicado pelo PyInstaller.
+- Atualizado o README com instruções de instalação para usuários finais, pré-requisitos de build, comando de geração e configuração opcional do caminho de `ISCC.exe`.
+
+## Confiabilidade do build e testes
+
+- `build.py` agora retorna status de sucesso/falha e o entrypoint converte esse resultado em código de saída do processo. Isso impede que o empacotador trate uma falha do PyInstaller como sucesso e continue com artefatos antigos.
+- Adicionado teste para garantir que a falha de build é comunicada ao chamador.
+- Adicionado `tests/test_installer.py` cobrindo a configuração de instalação, comando/versionamento do Inno Setup, compilador ausente, executável ausente e sequência de build e empacotamento.
+- Validação executada: `pytest -v` — 370 testes passaram no Python 3.12.10.
+- O workflow em `.github/workflows/ci.yml` instala `requirements.txt` e executa `pytest -v`; a suíte equivalente passou localmente. O workflow remoto não foi disparado.
+- Inno Setup 6.7.3 foi instalado e o fluxo de build compilou `dist/System Boost Setup.exe` com sucesso. O teste automatizado de instalação real do programa não foi executado.

@@ -17,8 +17,25 @@ A high-performance Windows CLI utility that cleans temporary files and applies r
 
 ## Installation
 
+### Para usar o programa
+
+Baixe e execute `System Boost Setup.exe`. O instalador configura o aplicativo no perfil do usuário, cria um atalho no menu Iniciar e registra o desinstalador. Python e dependências do projeto não são necessários na máquina de destino; eles já estão incorporados no executável. Ao iniciar o aplicativo, o Windows ainda solicitará elevação pelo UAC.
+
+### Para gerar o instalador (Windows)
+
+Instale o [Python 3.11 ou superior](https://www.python.org/downloads/windows/) e o [Inno Setup 6](https://jrsoftware.org/isinfo.php). Em seguida, na raiz do repositório, execute:
+
 ```bash
-pip install -r requirements.txt
+python installer.py
+```
+
+O script instala as dependências listadas em `requirements.txt`, executa o build existente do PyInstaller e gera `dist/System Boost Setup.exe` (além de `dist/System Boost.exe`). Para empacotar um executável já construído, use `python installer.py --skip-build`.
+
+Se `ISCC.exe` não estiver no `PATH` nem no local padrão do Inno Setup, configure `INNO_SETUP_COMPILER` com o caminho completo do compilador, por exemplo:
+
+```powershell
+$env:INNO_SETUP_COMPILER = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+python installer.py
 ```
 
 ## Usage
@@ -79,6 +96,8 @@ pip install -r requirements.txt
 python build.py
 # output: dist/System Boost.exe
 ```
+
+Para gerar também o instalador Windows, use `python installer.py` conforme as instruções acima.
 
 The built exe **always asks for Administrator** (UAC prompt on every launch: the manifest is `requireAdministrator`), and carries `System Boost by Felipe Grolla` as its file description/company in Properties → Details. (`python main.py` from source is unaffected: run an elevated terminal yourself.)
 
