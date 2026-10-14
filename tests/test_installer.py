@@ -43,8 +43,10 @@ def test_resolve_compiler_finds_per_user_inno_setup(monkeypatch, tmp_path):
     compiler.write_bytes(b"compiler")
     monkeypatch.delenv(installer.COMPILER_ENV_VAR, raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    # CI images may have a machine-wide Inno Setup install, which the resolver
+    # correctly checks first. Keep this test focused on the per-user fallback.
+    monkeypatch.setenv("ProgramFiles(x86)", str(tmp_path / "Program Files (x86)"))
     monkeypatch.setattr(installer.shutil, "which", lambda _: None)
-    monkeypatch.setattr(installer, "_default_compiler_paths", installer._default_compiler_paths)
 
     assert installer.resolve_compiler() == str(compiler)
 
