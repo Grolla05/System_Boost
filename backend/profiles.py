@@ -8,39 +8,49 @@ from .tweaks.base import TweakAlreadyApplied, TweakError
 
 log = get_logger("profiles")
 
+def _extend(previous_id, level_id, label, description, clean_paths=(), tweak_ids=()):
+    """Builds a stage as the previous stage plus extras (union, previous order first, no repeats)."""
+    previous = LEVELS[previous_id]
+    return {
+        "id": level_id,
+        "label": label,
+        "description": description,
+        "clean_paths": previous["clean_paths"] + tuple(p for p in clean_paths if p not in previous["clean_paths"]),
+        "tweak_ids": previous["tweak_ids"] + tuple(t for t in tweak_ids if t not in previous["tweak_ids"]),
+    }
+
+
+# Each stage is the previous one + its extras; descriptions read "STAGE N + [extras]".
 LEVELS = {
     "leve": {
         "id": "leve",
         "label": "Leve",
-        "description": "Limpeza da pasta temporária do usuário e ajuste leve de efeitos visuais.",
-        "clean_paths": ("User Temp",),
-        "tweak_ids": ("visual_effects",),
-    },
-    "mediana": {
-        "id": "mediana",
-        "label": "Mediana",
-        "description": "Leve + limpeza do temp do sistema e plano de energia de alto desempenho.",
-        "clean_paths": ("User Temp", "System Temp"),
-        "tweak_ids": ("visual_effects", "power_plan"),
-    },
-    "alta": {
-        "id": "alta",
-        "label": "Alta",
-        "description": "Mediana + Prefetch, hibernação e indexação de pesquisa desativadas.",
-        "clean_paths": ("User Temp", "System Temp", "Prefetch"),
-        "tweak_ids": ("visual_effects", "power_plan", "hibernation", "indexing"),
-    },
-    "extrema": {
-        "id": "extrema",
-        "label": "Extrema",
-        "description": "Alta + telemetria mínima, SysMain e tarefa de compatibilidade desativados.",
-        "clean_paths": ("User Temp", "System Temp", "Prefetch"),
-        "tweak_ids": (
-            "visual_effects", "power_plan", "hibernation", "indexing",
-            "telemetry", "sysmain", "compat_appraiser",
+        "description": (
+            "Limpa o temp do usuário e desativa apps, serviços e tarefas de terceiros "
+            "que sobem com o sistema."
         ),
+        "clean_paths": ("User Temp",),
+        "tweak_ids": ("startup_apps", "third_party_services", "third_party_tasks"),
     },
 }
+LEVELS["mediana"] = _extend(
+    "leve", "mediana", "Mediana",
+    "STAGE 1 + limpeza do Temp do Windows, plano de energia "
+    "Alto Desempenho, ofertas/recomendações do Windows desligadas e precisão do "
+    "ponteiro desativada.",
+    clean_paths=("System Temp",), tweak_ids=("power_plan", "recommendations_offers", "mouse_acceleration"),
+)
+LEVELS["alta"] = _extend(
+    "mediana", "alta", "Alta",
+    "STAGE 2 + efeitos visuais no modo melhor desempenho, hibernação e "
+    "indexação de pesquisa desativadas e limpeza do Prefetch.",
+    clean_paths=("Prefetch",), tweak_ids=("visual_effects", "hibernation", "indexing"),
+)
+LEVELS["extrema"] = _extend(
+    "alta", "extrema", "Extrema",
+    "STAGE 3 + ",
+    tweak_ids=("telemetry", "sysmain", "compat_appraiser"),
+)
 
 LEVEL_ORDER = ("leve", "mediana", "alta", "extrema")
 
@@ -71,27 +81,58 @@ def resolve_tweak_plan(level_id):
     return applicable, skipped
 
 
-def apply_level_tweaks(level_id, state_path=None):
+def _item_label(item):
+    """Display name for one item an aggregate tweak changed ({'name'|'task': ...})."""
+    if isinstance(item, dict):
+        if item.get("name"):
+            return str(item["name"])
+        if item.get("task"):
+            return str(item["task"]).rsplit("\\", 1)[-1]
+    return str(item)
+
+
+def apply_level_tweaks(level_id, state_path=None, on_event=None):
     """Applies every applicable tweak in the level, collecting (id, status, note) per tweak.
 
     status is True (applied), "already" (already applied earlier — not a failure),
     False (failed), or None (skipped — requires admin).
+
+    on_event(tweak_id, status, note), if given, is called live: "running" before each tweak,
+    then its final status (same values as above), then one "item" event per individual item an
+    aggregate tweak changed (note = the item's name).
     """
+    def emit(tweak_id, status, note=None):
+        if on_event:
+            on_event(tweak_id, status, note)
+
     applicable, skipped = resolve_tweak_plan(level_id)
     results = []
     for tweak_id in applicable:
         log.info("ajuste '%s': aplicando", tweak_id)
+        emit(tweak_id, "running")
         try:
-            tweaks_manager.apply_tweak(tweak_id, state_path=state_path)
+            applied_value = tweaks_manager.apply_tweak(tweak_id, state_path=state_path)
             results.append((tweak_id, True, None))
             log.info("ajuste '%s': aplicado", tweak_id)
         except TweakAlreadyApplied as exc:
             results.append((tweak_id, "already", "já aplicado"))
             log.info("ajuste '%s': já aplicado (%s)", tweak_id, exc)
+            emit(tweak_id, "already", "já aplicado")
+            continue
         except TweakError as exc:
             results.append((tweak_id, False, str(exc)))
             log.error("ajuste '%s': FALHOU: %s", tweak_id, exc)
+            emit(tweak_id, False, str(exc))
+            continue
+        if isinstance(applied_value, list):
+            summary = f"{len(applied_value)} item(ns)" if applied_value else "nenhum item de terceiros"
+            emit(tweak_id, True, summary)
+            for item in applied_value:
+                emit(tweak_id, "item", _item_label(item))
+        else:
+            emit(tweak_id, True)
     for tweak_id in skipped:
         results.append((tweak_id, None, "requer administrador"))
         log.warning("ajuste '%s': pulado (requer administrador)", tweak_id)
+        emit(tweak_id, None, "requer administrador")
     return results

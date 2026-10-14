@@ -7,6 +7,7 @@ class FakeWinReg:
 
     HKEY_LOCAL_MACHINE = "HKLM"
     HKEY_CURRENT_USER = "HKCU"
+    REG_SZ = 1
     REG_DWORD = 4
     KEY_SET_VALUE = 0x0002
     KEY_READ = 0x20019

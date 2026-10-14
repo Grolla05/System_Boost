@@ -85,7 +85,9 @@ def build_command(version_file):
     # --noconfirm: overwrite existing
     # --distpath: output directory
     return [
-        "pyinstaller",
+        sys.executable,
+        "-m",
+        "PyInstaller",
         "--onefile",
         "--console",
         "--uac-admin",
@@ -141,7 +143,7 @@ def build():
             f"Close its window (or run `Stop-Process -Name \"{APP_NAME}\" -Force` in an "
             "elevated PowerShell) and run build.py again."
         )
-        return
+        return False
 
     # Ensure dependencies are installed
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
@@ -154,7 +156,7 @@ def build():
         print("\nBuild successful! Executable located in /dist folder.")
     except subprocess.CalledProcessError as e:
         print(f"\nBuild failed: {e}")
-        return
+        return False
 
     exe_path = os.path.join("dist", f"{APP_NAME}.exe")
     try:
@@ -167,7 +169,8 @@ def build():
             )
     except (subprocess.CalledProcessError, OSError) as e:
         print(f"\nSigning failed: {e}")
+    return True
 
 
 if __name__ == "__main__":
-    build()
+    raise SystemExit(0 if build() else 1)

@@ -11,6 +11,7 @@ from .components.undo_menu import display_undo_confirm, display_undo_empty, disp
 from .components.level_completion import display_level_completion
 from .components.driver_progress import run_driver_update_with_progress, format_driver_summary
 from .components.machine_info import display_machine_info
+from .components.live_log import MissionLog
 
 from .audio import set_sound_enabled, is_sound_enabled
 from .palettes import (
@@ -57,10 +58,14 @@ def show_welcome(skip_wait=False):
 def show_loading(paths, clean_func, format_func, dry_run=False):
     return run_cleanup_with_loading(console, paths, clean_func, format_func, dry_run=dry_run)
 
-def show_completion(total_formatted, dry_run=False, close_terminal=True, skip_wait=False, driver_summary=None):
+def show_mission_log(title):
+    """Returns a MissionLog context manager: live step-by-step log (running / OK / FAIL / SKIP)."""
+    return MissionLog(console, title)
+
+def show_completion(total_formatted, dry_run=False, close_terminal=True, skip_wait=False, driver_summary=None, clear=True):
     display_completion_screen(
         console, total_formatted, dry_run=dry_run, close_terminal=close_terminal,
-        skip_wait=skip_wait, driver_summary=driver_summary,
+        skip_wait=skip_wait, driver_summary=driver_summary, clear=clear,
     )
 
 def show_tweak_list(statuses):
@@ -96,8 +101,8 @@ def show_level_summary(level_id, clean_paths, applicable_ids, skipped_ids):
 def show_driver_update(update_func, dry_run=False):
     return run_driver_update_with_progress(console, update_func, dry_run=dry_run)
 
-def show_level_completion(level_label, total_formatted, tweak_results, close_terminal=True, skip_wait=False, driver_summary=None):
+def show_level_completion(level_label, total_formatted, tweak_results, close_terminal=True, skip_wait=False, driver_summary=None, clear=True):
     return display_level_completion(
         console, level_label, total_formatted, tweak_results,
-        close_terminal=close_terminal, skip_wait=skip_wait, driver_summary=driver_summary,
+        close_terminal=close_terminal, skip_wait=skip_wait, driver_summary=driver_summary, clear=clear,
     )

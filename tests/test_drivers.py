@@ -217,3 +217,37 @@ def test_powershell_does_not_inherit_console_stdin(monkeypatch):
     drivers.scan_drivers()
 
     assert fake.calls[0][1]["stdin"] is drivers.subprocess.DEVNULL
+
+
+def test_update_all_on_result_reports_each_driver(monkeypatch):
+    fake = FakeRun([
+        _Completed(0, _scan_payload(GUID_A, GUID_B)),
+        _install_ok(),
+        _install_fail(),
+    ])
+    _patch(monkeypatch, fake)
+    events = []
+
+    drivers.update_all_drivers(on_result=lambda title, status, note: events.append((title, status)))
+
+    assert events == [("Driver 1", True), ("Driver 2", False)]
+
+
+def test_update_all_on_result_reports_exceptions_as_failure(monkeypatch):
+    fake = FakeRun([_Completed(0, _scan_payload(GUID_A)), _Completed(1, b"", b"err")])
+    _patch(monkeypatch, fake)
+    events = []
+
+    drivers.update_all_drivers(on_result=lambda title, status, note: events.append(status))
+
+    assert events == [False]
+
+
+def test_update_all_on_result_dry_run_reports_skip(monkeypatch):
+    fake = FakeRun([_Completed(0, _scan_payload(GUID_A))])
+    _patch(monkeypatch, fake)
+    events = []
+
+    drivers.update_all_drivers(dry_run=True, on_result=lambda title, status, note: events.append((status, note)))
+
+    assert events == [(None, "dry-run")]

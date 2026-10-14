@@ -19,7 +19,8 @@ def test_build_command_keeps_existing_flags():
 
     for flag in ("--onefile", "--console", "--name=System Boost", "--clean", "--noconfirm", "--distpath=./dist"):
         assert flag in cmd
-    assert cmd[0] == "pyinstaller"
+    assert cmd[0] == build.sys.executable
+    assert cmd[1:3] == ["-m", "PyInstaller"]
     assert cmd[-1] == "main.py"
 
 
@@ -144,7 +145,22 @@ def test_build_aborts_before_pyinstaller_when_exe_is_running(monkeypatch, capsys
     called = []
     monkeypatch.setattr(build.subprocess, "check_call", lambda *a, **k: called.append(a))
 
-    build.build()
+    assert build.build() is False
 
     assert called == []
     assert "System Boost.exe" in capsys.readouterr().out
+
+
+def test_build_reports_failure_to_calling_script(monkeypatch, capsys):
+    monkeypatch.setattr(build, "is_exe_running", lambda: False)
+    calls = []
+
+    def fail_pyinstaller(command, **kwargs):
+        calls.append(command)
+        if len(calls) == 2:
+            raise build.subprocess.CalledProcessError(1, command)
+
+    monkeypatch.setattr(build.subprocess, "check_call", fail_pyinstaller)
+
+    assert build.build() is False
+    assert "Build failed" in capsys.readouterr().out

@@ -94,8 +94,8 @@ def _render_menu_panel(selected_idx: int) -> Panel:
     lines = []
     stage_titles = [
         "STAGE 1: LEVE (NORMAL)",
-        "STAGE 2: MEDIANA (TURBO BOOST)",
-        "STAGE 3: ALTA (OVERCLOCK)",
+        "STAGE 2: MEDIANA (BOOST)",
+        "STAGE 3: ALTA (TURBO BOOST)",
         "STAGE 4: EXTREMA (HYPER DRIVE)",
     ]
 
@@ -223,6 +223,8 @@ def display_level_summary(console: Console, level_id, clean_paths, applicable_id
     else:
         lines.append("")
         lines.append(f"[dim]Reversível: {REVERT_HINT}[/dim]")
+        if any(t in applicable_ids for t in ("startup_apps", "third_party_services", "third_party_tasks")):
+            lines.append("[dim]Preservados: itens do Windows, antivírus, drivers, VPN e OneDrive.[/dim]")
 
     if skipped_ids:
         lines.append("")
