@@ -10,7 +10,6 @@ __pycache__/
 bin/
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -171,3 +170,6 @@ $RECYCLE.BIN/
 
 # Runtime diagnostic logs
 logs/
+
+# System Boost executavel
+dist/System Boost.exe
