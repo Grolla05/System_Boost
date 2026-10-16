@@ -5,7 +5,7 @@ A high-performance Windows CLI utility that cleans temporary files and applies r
 ## Features
 
 - **Guided optimization levels** — `python main.py` with no arguments walks you through 4 escalating levels (Leve/Mediana/Alta/Extrema), each bundling temp cleanup with a matching set of reversible tweaks, with a summary + confirmation before anything runs.
-- **Temp file cleanup** — User Temp, System Temp, and Prefetch, with dry-run mode and per-folder selection.
+- **Temp file cleanup** — User Temp, System Temp, Prefetch, SquirrelTemp, Gradle/Go/user caches, plus npm/uv cache clean and Recycle Bin (Stage 2 "Lista C"), with dry-run mode and per-folder selection.
 - **Reversible Windows tweaks** — 7 built-in tweaks (power plan, hibernation, visual effects, telemetry, search indexing, SysMain, compatibility appraiser task). Every tweak reads and saves its current value before changing anything, and can be undone individually or all at once.
 - **Machine spec sheet** — `python main.py info` (or option 5 in the guided menu) shows Windows version/build, CPU, installed RAM, GPU(s), system-disk type (SSD/HDD) and notebook vs desktop. Read-only, no Administrator needed; anything that can't be read shows as "desconhecido".
 - **Rich terminal UI** — live progress bar during cleanup, a status table for tweaks, clear success/error panels.

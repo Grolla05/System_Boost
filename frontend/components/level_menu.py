@@ -191,7 +191,7 @@ def display_level_menu(console: Console):
             return _OPTIONS[selected_idx]
 
 
-def display_level_summary(console: Console, level_id, clean_paths, applicable_ids, skipped_ids):
+def display_level_summary(console: Console, level_id, clean_paths, applicable_ids, skipped_ids, clean_commands=()):
     """Shows the retro pre-scan disk breakdown and mission briefing before running."""
     from backend import cleaner
     from .disk_breakdown import measure_paths_sizes, create_disk_breakdown_panel
@@ -212,9 +212,11 @@ def display_level_summary(console: Console, level_id, clean_paths, applicable_id
         f"[bold success]MISSION BRIEFING // STAGE: {level['label'].upper()}[/bold success]",
         "",
         "[bold accent]Pastas a limpar:[/bold accent] " + (", ".join(sorted(clean_paths)) if clean_paths else "nenhuma"),
-        "",
-        "[bold accent]Ajustes a aplicar:[/bold accent]",
     ]
+    if clean_commands:
+        labels = [cleaner.COMMAND_CLEANUPS[c][0] for c in clean_commands]
+        lines.append("[bold accent]Caches/Lixeira:[/bold accent] " + ", ".join(labels))
+    lines += ["", "[bold accent]Ajustes a aplicar:[/bold accent]"]
 
     for tweak_id in applicable_ids:
         lines.append(f"  [bold warning]⚡ {tweaks_catalog.get_tweak(tweak_id).label}[/bold warning]")
@@ -225,6 +227,8 @@ def display_level_summary(console: Console, level_id, clean_paths, applicable_id
         lines.append(f"[dim]Reversível: {REVERT_HINT}[/dim]")
         if any(t in applicable_ids for t in ("startup_apps", "third_party_services", "third_party_tasks")):
             lines.append("[dim]Preservados: itens do Windows, antivírus, drivers, VPN e OneDrive.[/dim]")
+        if "hibernation" in applicable_ids:
+            lines.append("[warning]Hibernação off: apaga o hiberfil.sys e perde hibernação/inicialização rápida.[/warning]")
 
     if skipped_ids:
         lines.append("")

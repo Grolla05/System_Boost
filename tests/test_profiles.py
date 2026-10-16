@@ -295,7 +295,25 @@ def test_on_event_is_optional(monkeypatch, tmp_path):
 def test_mediana_adds_power_plan_offers_and_mouse_acceleration_over_leve():
     leve, mediana = profiles.LEVELS["leve"], profiles.LEVELS["mediana"]
     assert "mouse_acceleration" not in leve["tweak_ids"]
-    assert mediana["tweak_ids"][len(leve["tweak_ids"]):] == ("power_plan", "recommendations_offers", "mouse_acceleration")
+    assert mediana["tweak_ids"][len(leve["tweak_ids"]):] == (
+        "power_plan", "recommendations_offers", "mouse_acceleration", "hibernation")
+
+
+def test_mediana_includes_lista_c_cleanups_and_alta_inherits_them():
+    mediana, alta = profiles.LEVELS["mediana"], profiles.LEVELS["alta"]
+    assert profiles.LEVELS["leve"]["clean_commands"] == ()
+    assert mediana["clean_commands"] == ("npm-cache", "uv-cache", "recycle-bin")
+    for name in ("SquirrelTemp", "Gradle Cache", "Go Build Cache", "User Cache"):
+        assert name in mediana["clean_paths"]
+    assert alta["clean_commands"] == mediana["clean_commands"]
+    assert alta["tweak_ids"].count("hibernation") == 1
+
+
+def test_non_admin_keeps_user_scope_cleanup_paths(monkeypatch):
+    paths = dict(_ALL_TEMP_PATHS, SquirrelTemp=r"C:\Users\x\AppData\Local\SquirrelTemp")
+    _patch_temp_paths(monkeypatch, paths)
+    monkeypatch.setattr(profiles, "is_admin", lambda: False)
+    assert set(profiles.resolve_clean_paths("mediana")) == {"User Temp", "SquirrelTemp"}
 
 
 def test_visual_effects_only_from_alta_onwards():

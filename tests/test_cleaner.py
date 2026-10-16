@@ -1,4 +1,5 @@
 import os
+from backend import cleaner
 
 from backend.cleaner import (
     clean_directory,
@@ -169,3 +170,37 @@ def test_clean_directory_progress_counts_protected_entry(tmp_path, monkeypatch):
     clean_directory(tmp_path, progress_callback=ticks.append)
 
     assert len(ticks) == 2
+
+
+# --- command cleanups ---
+
+def _fake_cleanup(monkeypatch, measure, clean, executable="npm"):
+    monkeypatch.setitem(cleaner.COMMAND_CLEANUPS, "fake", ("Fake", executable, measure, clean))
+
+
+def test_command_cleanup_skips_when_tool_missing(monkeypatch):
+    called = []
+    _fake_cleanup(monkeypatch, lambda: 10, lambda: called.append(1) or (True, ""))
+    monkeypatch.setattr(cleaner.shutil, "which", lambda name: None)
+    assert cleaner.run_command_cleanup("fake") == ("skip", 0)
+    assert not called
+
+
+def test_command_cleanup_reports_measured_delta(monkeypatch):
+    sizes = iter([100, 30])
+    _fake_cleanup(monkeypatch, lambda: next(sizes), lambda: (True, ""))
+    monkeypatch.setattr(cleaner.shutil, "which", lambda name: "npm")
+    assert cleaner.run_command_cleanup("fake") == ("ok", 70)
+
+
+def test_command_cleanup_dry_run_does_not_clean(monkeypatch):
+    called = []
+    _fake_cleanup(monkeypatch, lambda: 55, lambda: called.append(1) or (True, ""))
+    monkeypatch.setattr(cleaner.shutil, "which", lambda name: "npm")
+    assert cleaner.run_command_cleanup("fake", dry_run=True) == ("ok", 55)
+    assert not called
+
+
+def test_command_cleanup_failure_is_reported_not_raised(monkeypatch):
+    _fake_cleanup(monkeypatch, lambda: 5, lambda: (False, "boom"), executable=None)
+    assert cleaner.run_command_cleanup("fake") == ("fail", 0)

@@ -54,6 +54,7 @@ Contém as regras de negócio para análise e exclusão física de arquivos e di
     *   **User Temp**: `%TEMP%` (normalmente `C:\Users\<user>\AppData\Local\Temp`).
     *   **System Temp**: `C:\Windows\Temp`.
     *   **Prefetch**: `C:\Windows\Prefetch`.
+    *   **SquirrelTemp** (`%LOCALAPPDATA%\SquirrelTemp`), **Gradle Cache** (`~/.gradle/caches`), **Go Build Cache** (`%LOCALAPPDATA%\go-build`), **User Cache** (`~/.cache`): pastas do usuário, sem admin.
 *   `get_dir_size(path)`: Calcula recursivamente o tamanho total de um diretório em bytes utilizando varredura rápida (`os.scandir`).
 *   `format_size(size_bytes)`: Formata bytes para unidades humanas legíveis (`B`, `KB`, `MB`, `GB`, `TB`).
 *   `clean_directory(directory_path, progress_callback)`: Executa a exclusão de arquivos e subdiretórios com segurança:
@@ -306,11 +307,11 @@ Na tela de conclusão (passo 4), **Enter** (ou qualquer tecla além de ESC) ence
 | Nível | Pastas limpas | Ajustes aplicados |
 |---|---|---|
 | Leve | User Temp | `startup_apps`, `third_party_services`, `third_party_tasks` |
-| Mediana | + System Temp | + `power_plan`, `recommendations_offers`, `mouse_acceleration` |
-| Alta | + Prefetch | + `visual_effects`, `hibernation`, `indexing` |
+| Mediana | + System Temp, SquirrelTemp, Gradle/Go/User Cache, npm/uv cache, Lixeira | + `power_plan`, `recommendations_offers`, `mouse_acceleration`, `hibernation` |
+| Alta | + Prefetch | + `visual_effects`, `indexing` |
 | Extrema | (mesmas de Alta) | + `telemetry`, `sysmain`, `compat_appraiser` |
 
-Cada nível é só uma lista declarativa de pastas + ids de ajustes em `profiles.LEVELS` — nenhuma lógica nova de limpeza ou de ajuste é criada; `resolve_clean_paths()` reaproveita `cleaner.get_temp_paths()` e o mesmo filtro por admin que `cmd_clean` já tinha, e `apply_level_tweaks()` reaproveita `tweaks.manager.apply_tweak()` ajuste por ajuste.
+Cada nível é uma lista declarativa de pastas + comandos de limpeza (`clean_commands`: `npm-cache`, `uv-cache`, `recycle-bin`, executados por `cleaner.run_command_cleanup()`, que ignora ferramenta não instalada e mede o ganho antes/depois) + ids de ajustes em `profiles.LEVELS`; o Stage 2 (Mediana) inclui a "Lista C" e o ajuste `hibernation` (remove o hiberfil.sys; perde hibernação/inicialização rápida); `resolve_clean_paths()` reaproveita `cleaner.get_temp_paths()` e o mesmo filtro por admin que `cmd_clean` já tinha, e `apply_level_tweaks()` reaproveita `tweaks.manager.apply_tweak()` ajuste por ajuste.
 
 **Degradação graciosa, igual ao `clean`**: se o terminal não está elevado, ajustes que exigem admin (e pastas que exigem admin) são automaticamente pulados — nunca travam a execução do nível inteiro. A tela de resumo (passo 3) já mostra separadamente o que vai rodar e o que vai ser pulado por falta de admin, antes de qualquer coisa ser alterada; a tela de conclusão (passo 4) reporta quantos ajustes foram aplicados, pulados e (se algum já estava aplicado de uma execução anterior) quantos falharam.
 

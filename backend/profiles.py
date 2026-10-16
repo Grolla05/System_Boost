@@ -8,7 +8,7 @@ from .tweaks.base import TweakAlreadyApplied, TweakError
 
 log = get_logger("profiles")
 
-def _extend(previous_id, level_id, label, description, clean_paths=(), tweak_ids=()):
+def _extend(previous_id, level_id, label, description, clean_paths=(), tweak_ids=(), clean_commands=()):
     """Builds a stage as the previous stage plus extras (union, previous order first, no repeats)."""
     previous = LEVELS[previous_id]
     return {
@@ -16,6 +16,8 @@ def _extend(previous_id, level_id, label, description, clean_paths=(), tweak_ids
         "label": label,
         "description": description,
         "clean_paths": previous["clean_paths"] + tuple(p for p in clean_paths if p not in previous["clean_paths"]),
+        "clean_commands": previous["clean_commands"] + tuple(
+            c for c in clean_commands if c not in previous["clean_commands"]),
         "tweak_ids": previous["tweak_ids"] + tuple(t for t in tweak_ids if t not in previous["tweak_ids"]),
     }
 
@@ -30,21 +32,25 @@ LEVELS = {
             "que sobem com o sistema."
         ),
         "clean_paths": ("User Temp",),
+        "clean_commands": (),
         "tweak_ids": ("startup_apps", "third_party_services", "third_party_tasks"),
     },
 }
 LEVELS["mediana"] = _extend(
     "leve", "mediana", "Mediana",
-    "STAGE 1 + limpeza do Temp do Windows, plano de energia "
-    "Alto Desempenho, ofertas/recomendações do Windows desligadas e precisão do "
-    "ponteiro desativada.",
-    clean_paths=("System Temp",), tweak_ids=("power_plan", "recommendations_offers", "mouse_acceleration"),
+    "STAGE 1 + limpeza do Temp do Windows e de caches (Squirrel, npm, uv, Gradle, Go, .cache), "
+    "Lixeira esvaziada, hibernação desativada (apaga o hiberfil.sys; perde hibernação e "
+    "inicialização rápida), plano de energia Alto Desempenho, ofertas/recomendações do Windows "
+    "desligadas e precisão do ponteiro desativada.",
+    clean_paths=("System Temp", "SquirrelTemp", "Gradle Cache", "Go Build Cache", "User Cache"),
+    clean_commands=("npm-cache", "uv-cache", "recycle-bin"),
+    tweak_ids=("power_plan", "recommendations_offers", "mouse_acceleration", "hibernation"),
 )
 LEVELS["alta"] = _extend(
     "mediana", "alta", "Alta",
-    "STAGE 2 + efeitos visuais no modo melhor desempenho, hibernação e "
-    "indexação de pesquisa desativadas e limpeza do Prefetch.",
-    clean_paths=("Prefetch",), tweak_ids=("visual_effects", "hibernation", "indexing"),
+    "STAGE 2 + efeitos visuais no modo melhor desempenho, "
+    "indexação de pesquisa desativada e limpeza do Prefetch.",
+    clean_paths=("Prefetch",), tweak_ids=("visual_effects", "indexing"),
 )
 LEVELS["extrema"] = _extend(
     "alta", "extrema", "Extrema",
@@ -59,7 +65,7 @@ def resolve_clean_paths(level_id):
     """Returns {name: path} for the level's clean_paths, filtered to admin scope and to what exists."""
     all_paths = cleaner.get_temp_paths()
     admin = is_admin()
-    allowed = all_paths if admin else {k: v for k, v in all_paths.items() if k == "User Temp"}
+    allowed = all_paths if admin else {k: v for k, v in all_paths.items() if k not in cleaner.ADMIN_ONLY_PATHS}
     level = LEVELS[level_id]
     resolved = {k: v for k, v in allowed.items() if k in level["clean_paths"]}
     log.info("nível '%s': admin=%s, pastas de limpeza=%s", level_id, admin, resolved)
