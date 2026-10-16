@@ -28,6 +28,9 @@ Source: "{#SourceDir}\System Boost.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\System Boost"; Filename: "{app}\{#AppExeName}"
+Name: "{autodesktop}\System Boost"; Filename: "{app}\{#AppExeName}"
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "Iniciar o System Boost"; Flags: postinstall nowait skipifsilent
+; Launched through the desktop shortcut with shellexec: the exe requires Administrator (--uac-admin)
+; while the setup runs unelevated, so a direct CreateProcess would fail with error 740.
+Filename: "{autodesktop}\System Boost.lnk"; Description: "Iniciar o System Boost"; Flags: postinstall shellexec nowait skipifsilent
