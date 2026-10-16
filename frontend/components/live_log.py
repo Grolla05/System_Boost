@@ -20,6 +20,7 @@ _TAGS = {
     "already": ("[ OK ]", "dim"),
     "fail": ("[FAIL]", "danger"),
     "skip": ("[SKIP]", "warning"),
+    "warn": ("[ !! ]", "warning"),
 }
 
 # Panel borders (2) + title/padding rows kept free so a cropped log never overflows the screen.
@@ -30,7 +31,7 @@ _CHROME_ROWS = 6
 class LogLine:
     key: Optional[str]
     text: str
-    status: str  # running | ok | already | fail | skip
+    status: str  # running | ok | already | fail | skip | warn
     note: Optional[str] = None
     indent: bool = False
 

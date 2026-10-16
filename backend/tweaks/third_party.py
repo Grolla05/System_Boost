@@ -16,8 +16,6 @@ EXCEPTION_NAMES = (
     "nvidia", "nv", "amd", "radeon", "intel", "realtek", "rtk", "synaptics", "elan", "logitech",
     "logi", "razer", "corsair", "steelseries", "asus", "dell", "hp", "lenovo", "msi", "bluetooth",
     "touchpad", "fingerprint",
-    # VPN / network essentials
-    "vpn", "nordvpn", "expressvpn", "protonvpn", "surfshark", "wireguard", "openvpn", "tailscale", "windscribe", "zerotier", "cloudflare",
     # cloud sync
     "onedrive",
     # virtualization / WSL
@@ -26,10 +24,26 @@ EXCEPTION_NAMES = (
     "microsoft", "windows",
 )
 
-_EXCEPTION_RE = re.compile(
-    r"(?<![a-z])(?:" + "|".join(re.escape(n) for n in EXCEPTION_NAMES) + ")",
-    re.IGNORECASE,
+# Extra protection used only for startup apps (Run keys / Startup folders). Services and scheduled
+# tasks keep the base list above. Same word-start matching rules.
+STARTUP_EXTRA_EXCEPTION_NAMES = (
+    # databases
+    "mysql", "mariadb", "postgres", "pgadmin", "mssql", "sqlserver", "sqlagent", "sqlbrowser",
+    "sqlwriter", "ssms", "mongod", "mongodb", "compass", "redis", "memurai", "oracle", "firebird",
+    "cassandra", "elasticsearch", "influxdb", "couchdb", "neo4j", "clickhouse", "cockroach",
+    "dbeaver", "heidisql", "datagrip", "navicat",
+    # backup / cloud sync / password managers / 2FA
+    "dropbox", "google drive", "googledrive", "nextcloud", "syncthing", "resilio", "mega", "veeam",
+    "acronis", "backblaze", "bitwarden", "1password", "keepass", "yubico", "authy",
 )
+
+
+def _compile(names):
+    return re.compile(r"(?<![a-z])(?:" + "|".join(re.escape(n) for n in names) + ")", re.IGNORECASE)
+
+
+_EXCEPTION_RE = _compile(EXCEPTION_NAMES)
+_STARTUP_EXCEPTION_RE = _compile(EXCEPTION_NAMES + STARTUP_EXTRA_EXCEPTION_NAMES)
 
 
 def extract_executable(command):
@@ -55,10 +69,11 @@ def _is_windows_owned(path):
     return "\\microsoft" in normalized
 
 
-def is_third_party(name, command, display=None):
+def is_third_party(name, command, display=None, *, startup=False):
     """True only for items clearly owned by third-party software and not on the exceptions list.
 
-    An empty command means the owner is unknown, so the item is left alone.
+    An empty command means the owner is unknown, so the item is left alone. startup=True also
+    protects databases, dev servers, cloud sync and password managers (see STARTUP_EXTRA_EXCEPTION_NAMES).
     """
     executable = extract_executable(command)
     if not executable:
@@ -66,4 +81,5 @@ def is_third_party(name, command, display=None):
     if _is_windows_owned(executable):
         return False
     haystack = " ".join(part for part in (name, display, executable) if part)
-    return _EXCEPTION_RE.search(haystack) is None
+    pattern = _STARTUP_EXCEPTION_RE if startup else _EXCEPTION_RE
+    return pattern.search(haystack) is None

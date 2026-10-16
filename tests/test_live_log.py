@@ -145,3 +145,12 @@ def test_panel_has_fixed_width_so_centering_does_not_jitter():
     for i in range(10):
         mlog.start(f"k{i}", "uma linha bem mais longa do que a primeira " * 1)
     assert mlog.render(40).width == first
+
+
+def test_warn_status_renders_a_visible_tag_and_text():
+    mlog = MissionLog(_console(), "STAGE 1")
+    mlog.finish("n", "warn", text="a tela pode piscar durante a instalação")
+
+    out = _render(mlog)
+
+    assert "!!" in out and "a tela pode piscar" in out

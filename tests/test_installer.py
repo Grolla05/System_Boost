@@ -95,3 +95,21 @@ def test_build_installer_without_build_requires_existing_executable(tmp_path, mo
 
     with pytest.raises(installer.InstallerError, match="System Boost.exe"):
         installer.build_installer(build_executable=False)
+
+
+def test_installer_script_creates_desktop_shortcut():
+    script = (ROOT / "installer.iss").read_text(encoding="utf-8")
+
+    assert 'Name: "{autodesktop}\System Boost"; Filename: "{app}\{#AppExeName}"' in script
+    # Always created (no optional [Tasks] entry), so the post-install launch can rely on it.
+    assert "[Tasks]" not in script
+
+
+def test_installer_script_launches_app_through_shortcut_after_install():
+    script = (ROOT / "installer.iss").read_text(encoding="utf-8")
+    run = script.split("[Run]")[1]
+
+    # The exe requires Administrator (--uac-admin) while the setup runs unelevated, so a plain
+    # CreateProcess fails with error 740; going through the .lnk with shellexec triggers UAC.
+    assert 'Filename: "{autodesktop}\System Boost.lnk"' in run
+    assert "postinstall" in run and "shellexec" in run and "nowait" in run

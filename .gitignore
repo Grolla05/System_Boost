@@ -11,6 +11,7 @@ bin/
 build/
 develop-eggs/
 downloads/
+dist/
 eggs/
 .eggs/
 lib/
@@ -171,5 +172,7 @@ $RECYCLE.BIN/
 # Runtime diagnostic logs
 logs/
 
-# System Boost executavel
-dist/System Boost.exe
+# IA e afins
+CLAUDE.md
+AGENTS.md
+claude/

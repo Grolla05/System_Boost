@@ -156,7 +156,7 @@ class StartupAppsTweak(Tweak):
         """Enabled third-party entries."""
         return [
             e for e in discover_entries()
-            if e["enabled"] and third_party.is_third_party(e["name"], e["command"])
+            if e["enabled"] and third_party.is_third_party(e["name"], e["command"], startup=True)
         ]
 
     def get_current_value(self):
