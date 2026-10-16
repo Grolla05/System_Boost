@@ -1,7 +1,10 @@
 import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
+from ._powershell import PowerShellError, run_powershell
 from .logger import get_logger
 
 log = get_logger("cleaner")
@@ -116,11 +119,99 @@ def clean_directory(directory_path, progress_callback=None, dry_run=False):
     log.info("limpeza '%s': concluída, %d bytes liberados, %d entradas ignoradas", path, bytes_freed, skipped)
     return bytes_freed
 
+ADMIN_ONLY_PATHS = frozenset({"System Temp", "Prefetch"})
+
+
 def get_temp_paths():
-    """Returns a list of standard Windows temporary directories."""
+    """Returns a dict of standard Windows temporary/cache directories that exist."""
+    local = os.environ.get("LOCALAPPDATA")
+    home = os.path.expanduser("~")
     paths = {
         "User Temp": os.environ.get("TEMP"),
         "System Temp": "C:\\Windows\\Temp",
-        "Prefetch": "C:\\Windows\\Prefetch"
+        "Prefetch": "C:\\Windows\\Prefetch",
+        "SquirrelTemp": os.path.join(local, "SquirrelTemp") if local else None,
+        # Only caches: ~/.gradle also holds gradle.properties (credentials/config)
+        "Gradle Cache": os.path.join(home, ".gradle", "caches"),
+        "Go Build Cache": os.path.join(local, "go-build") if local else None,
+        "User Cache": os.path.join(home, ".cache"),
     }
     return {k: v for k, v in paths.items() if v and os.path.exists(v)}
+
+
+# --- Command-based cleanups (tool's own cache clean; nothing is moved) ---
+
+def _run_command(argv, timeout=300):
+    """Runs a tool command; returns (ok, detail). Never raises."""
+    try:
+        result = subprocess.run(
+            argv, capture_output=True, check=False, timeout=timeout, stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, str(exc)
+    if result.returncode != 0:
+        detail = (result.stderr or b"").decode("utf-8", errors="replace").strip()
+        return False, detail[:200] or f"código {result.returncode}"
+    return True, (result.stdout or b"").decode("utf-8", errors="replace").strip()
+
+
+def _tool_cache_dir(argv):
+    """Asks a tool for its cache directory (e.g. `npm config get cache`)."""
+    ok, out = _run_command(argv, timeout=30)
+    path = out.splitlines()[-1].strip() if ok and out else ""
+    return path if path and os.path.isdir(path) else None
+
+
+def _recycle_bin_size():
+    try:
+        out = run_powershell(
+            "(New-Object -ComObject Shell.Application).NameSpace(0xA).Items() | "
+            "ForEach-Object { $_.ExtendedProperty('Size') } | Measure-Object -Sum | "
+            "ForEach-Object { [int64]$_.Sum }", 60)
+        return int(out or 0)
+    except (PowerShellError, ValueError):
+        return 0
+
+
+def _empty_recycle_bin():
+    try:
+        run_powershell("Clear-RecycleBin -Force -ErrorAction SilentlyContinue", 120)
+        return True, ""
+    except PowerShellError as exc:
+        return False, str(exc)
+
+
+# id -> (label, executable or None, size-measuring fn, clean fn)
+COMMAND_CLEANUPS = {
+    "npm-cache": (
+        "npm cache", "npm",
+        lambda: get_dir_size(d) if (d := _tool_cache_dir(["npm", "config", "get", "cache"])) else 0,
+        lambda: _run_command(["npm", "cache", "clean", "--force"]),
+    ),
+    "uv-cache": (
+        "uv cache", "uv",
+        lambda: get_dir_size(d) if (d := _tool_cache_dir(["uv", "cache", "dir"])) else 0,
+        lambda: _run_command(["uv", "cache", "clean"]),
+    ),
+    "recycle-bin": ("Lixeira", None, _recycle_bin_size, _empty_recycle_bin),
+}
+
+
+def run_command_cleanup(cleanup_id, dry_run=False):
+    """Runs one command cleanup. Returns (status, bytes_freed): status is 'ok', 'skip' (tool not
+    installed) or 'fail'. dry_run only measures."""
+    label, executable, measure, clean = COMMAND_CLEANUPS[cleanup_id]
+    if executable and shutil.which(executable) is None:
+        log.info("limpeza '%s': %s não instalado, ignorada", cleanup_id, executable)
+        return "skip", 0
+    before = measure()
+    if dry_run:
+        log.info("limpeza '%s': dry-run, %d bytes seriam liberados", cleanup_id, before)
+        return "ok", before
+    ok, detail = clean()
+    if not ok:
+        log.warning("limpeza '%s': falhou: %s", cleanup_id, detail)
+        return "fail", 0
+    freed = max(before - measure(), 0)
+    log.info("limpeza '%s': concluída, %d bytes liberados", cleanup_id, freed)
+    return "ok", freed
