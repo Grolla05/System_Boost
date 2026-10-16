@@ -155,8 +155,15 @@ def _update_drivers_logged(mlog, dry_run):
     def on_result(title, status, note):
         mlog.finish(f"driver:{title}", _LOG_STATUS[status], note)
 
+    notices = []
+
+    def on_notice(message):
+        notices.append(message)
+        mlog.finish(f"notice:{len(notices)}", "warn", text=message)
+
     results, reboot_required = update_all_drivers(
         progress_callback=on_item, on_scan=on_scan, dry_run=dry_run, on_result=on_result,
+        on_notice=on_notice,
     )
     if mlog.is_running("drivers"):  # skipped (no admin) or scan failed: no callbacks fired
         _, status, note = results[0]

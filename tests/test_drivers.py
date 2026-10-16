@@ -2,11 +2,17 @@ import json
 
 import pytest
 
-from backend import drivers
+from backend import drivers, nvidia_driver
 
 GUID_A = "11111111-1111-1111-1111-111111111111"
 GUID_B = "22222222-2222-2222-2222-222222222222"
 GUID_C = "33333333-3333-3333-3333-333333333333"
+
+
+@pytest.fixture(autouse=True)
+def _no_nvidia(monkeypatch):
+    """By default the machine has no NVIDIA update; real GPU detection must never run in tests."""
+    monkeypatch.setattr(drivers.nvidia_driver, "check_update", lambda: None)
 
 
 class _Completed:
@@ -251,3 +257,149 @@ def test_update_all_on_result_dry_run_reports_skip(monkeypatch):
     drivers.update_all_drivers(dry_run=True, on_result=lambda title, status, note: events.append((status, note)))
 
     assert events == [(None, "dry-run")]
+
+
+# --- NVIDIA ---------------------------------------------------------------
+
+NV_UPDATE = nvidia_driver.NvidiaUpdate("NVIDIA GeForce RTX 4070", "551.23", "617.42", "https://us.download.nvidia.com/x.exe")
+
+
+def _with_nvidia(monkeypatch, update=NV_UPDATE, install=None):
+    monkeypatch.setattr(drivers.nvidia_driver, "check_update", lambda: update)
+    installed = []
+
+    def fake_install(u):
+        installed.append(u)
+        return install() if install else (True, False, "instalado")
+
+    monkeypatch.setattr(drivers.nvidia_driver, "install_update", fake_install)
+    return installed
+
+
+def test_update_all_installs_nvidia_after_windows_update(monkeypatch):
+    fake = FakeRun([_Completed(0, _scan_payload(GUID_A)), _install_ok()])
+    _patch(monkeypatch, fake)
+    installed = _with_nvidia(monkeypatch)
+
+    results, _ = drivers.update_all_drivers()
+
+    assert [r[0] for r in results] == ["Driver 1", NV_UPDATE.title]
+    assert [r[1] for r in results] == [True, True]
+    assert installed == [NV_UPDATE]
+
+
+def test_update_all_nvidia_counts_in_on_scan_total(monkeypatch):
+    _patch(monkeypatch, FakeRun([_Completed(0, _scan_payload(GUID_A)), _install_ok()]))
+    _with_nvidia(monkeypatch)
+    totals = []
+
+    drivers.update_all_drivers(on_scan=totals.append)
+
+    assert totals == [2]
+
+
+def test_update_all_nvidia_alone_when_windows_update_has_nothing(monkeypatch):
+    _patch(monkeypatch, FakeRun([_Completed(0, b"[]")]))
+    _with_nvidia(monkeypatch)
+
+    results, _ = drivers.update_all_drivers()
+
+    assert [r[1] for r in results] == [True]
+
+
+def test_update_all_nvidia_dry_run_does_not_download(monkeypatch):
+    _patch(monkeypatch, FakeRun([_Completed(0, b"[]")]))
+    installed = _with_nvidia(monkeypatch)
+
+    results, _ = drivers.update_all_drivers(dry_run=True)
+
+    assert installed == []
+    assert [(r[0], r[1], r[2]) for r in results] == [(NV_UPDATE.title, None, "dry-run")]
+
+
+def test_update_all_warns_about_screen_flicker_before_installing_nvidia(monkeypatch):
+    _patch(monkeypatch, FakeRun([_Completed(0, b"[]")]))
+    order = []
+    _with_nvidia(monkeypatch, install=lambda: (order.append("install"), (True, False, "ok"))[1])
+    notices = []
+
+    def on_notice(message):
+        order.append("notice")
+        notices.append(message)
+
+    drivers.update_all_drivers(on_notice=on_notice)
+
+    assert notices == [nvidia_driver.FLICKER_WARNING]
+    assert order == ["notice", "install"]
+
+
+def test_update_all_no_flicker_warning_without_nvidia_update_or_in_dry_run(monkeypatch):
+    _patch(monkeypatch, FakeRun([_Completed(0, b"[]")]))
+    notices = []
+    drivers.update_all_drivers(on_notice=notices.append)
+    assert notices == []
+
+    _patch(monkeypatch, FakeRun([_Completed(0, b"[]")]))
+    _with_nvidia(monkeypatch)
+    drivers.update_all_drivers(dry_run=True, on_notice=notices.append)
+    assert notices == []
+
+
+def test_update_all_nvidia_failure_does_not_abort_and_is_recorded(monkeypatch):
+    _patch(monkeypatch, FakeRun([_Completed(0, _scan_payload(GUID_A)), _install_ok()]))
+
+    def boom():
+        raise nvidia_driver.NvidiaDriverError("assinatura inválida")
+
+    _with_nvidia(monkeypatch, install=boom)
+
+    results, _ = drivers.update_all_drivers()
+
+    assert [r[1] for r in results] == [True, False]
+    assert "assinatura" in results[1][2]
+
+
+def test_update_all_nvidia_lookup_error_becomes_skipped_entry(monkeypatch):
+    _patch(monkeypatch, FakeRun([_Completed(0, b"[]")]))
+
+    def boom():
+        raise nvidia_driver.NvidiaDriverError("não foi possível consultar a NVIDIA")
+
+    monkeypatch.setattr(drivers.nvidia_driver, "check_update", boom)
+
+    results, _ = drivers.update_all_drivers()
+
+    assert len(results) == 1 and results[0][1] is None
+    assert "NVIDIA" in results[0][0] and "consultar" in results[0][2]
+
+
+def test_update_all_nvidia_runs_even_if_windows_update_scan_fails(monkeypatch):
+    _patch(monkeypatch, FakeRun([_Completed(1, b"", b"boom")]))
+    installed = _with_nvidia(monkeypatch)
+
+    results, _ = drivers.update_all_drivers()
+
+    assert [r[1] for r in results] == [False, True]
+    assert installed == [NV_UPDATE]
+
+
+def test_update_all_nvidia_propagates_reboot_and_callbacks(monkeypatch):
+    _patch(monkeypatch, FakeRun([_Completed(0, b"[]")]))
+    _with_nvidia(monkeypatch, install=lambda: (True, True, "reinicie para concluir"))
+    titles, events = [], []
+
+    _, reboot = drivers.update_all_drivers(
+        progress_callback=titles.append, on_result=lambda t, s, n: events.append((t, s)))
+
+    assert reboot is True
+    assert titles == [NV_UPDATE.title] and events == [(NV_UPDATE.title, True)]
+
+
+def test_update_all_nvidia_skipped_without_admin(monkeypatch):
+    _patch(monkeypatch, FakeRun([]), admin=False)
+    installed = _with_nvidia(monkeypatch)
+
+    results, _ = drivers.update_all_drivers()
+
+    assert len(results) == 1 and results[0][1] is None
+    assert installed == []

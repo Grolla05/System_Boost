@@ -3,7 +3,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskPr
 
 
 def run_driver_update_with_progress(console: Console, update_func, dry_run=False):
-    """Runs update_func(progress_callback=, on_scan=, dry_run=) under a spinner/bar and prints results.
+    """Runs update_func(progress_callback=, on_scan=, dry_run=, on_notice=) under a spinner/bar and prints results.
 
     Returns (results, reboot_required) exactly as update_func produced them.
     """
@@ -25,8 +25,11 @@ def run_driver_update_with_progress(console: Console, update_func, dry_run=False
         def on_item(title):
             progress.update(task, description=f"Atualizando: {title[:50]}", advance=1)
 
+        def on_notice(message):
+            progress.console.print(f"[warning]{message}[/warning]")
+
         results, reboot_required = update_func(
-            progress_callback=on_item, on_scan=on_scan, dry_run=dry_run
+            progress_callback=on_item, on_scan=on_scan, dry_run=dry_run, on_notice=on_notice
         )
 
     return results, reboot_required
