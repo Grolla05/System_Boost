@@ -102,3 +102,14 @@ def test_undo_failure_does_not_abort_others(monkeypatch):
     StartupAppsTweak().undo([_entry("hkcu_run", "A"), _entry("hkcu_run", "B")])
 
     assert writes == ["B"]
+
+
+def test_candidates_skip_database_and_sync_clients(monkeypatch):
+    monkeypatch.setenv("SystemRoot", r"C:\Windows")
+    monkeypatch.setattr(startup_apps, "discover_entries", lambda: [
+        _raw("hkcu_run", "Spotify", r"C:\Users\x\Spotify.exe"),
+        _raw("hkcu_run", "MySQL Workbench", r"C:\Program Files\MySQL\MySQLWorkbench.exe"),
+        _raw("hkcu_run", "Dropbox", r"C:\Program Files (x86)\Dropbox\Client\Dropbox.exe"),
+    ])
+
+    assert StartupAppsTweak().get_current_value() == [_entry("hkcu_run", "Spotify")]
