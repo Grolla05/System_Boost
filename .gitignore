@@ -11,6 +11,7 @@ bin/
 build/
 develop-eggs/
 downloads/
+dist/
 eggs/
 .eggs/
 lib/
@@ -175,6 +176,3 @@ logs/
 CLAUDE.md
 AGENTS.md
 claude/
-
-# System Boost executavel
-dist/System Boost.exe
