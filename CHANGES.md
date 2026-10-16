@@ -1,5 +1,12 @@
 # Changes
 
+## Stage 2: "Lista C" de limpeza sem mover
+
+- `backend/cleaner.py`: `get_temp_paths()` ganha `SquirrelTemp`, `Gradle Cache` (`~/.gradle/caches`), `Go Build Cache` e `User Cache` (`~/.cache`); `ADMIN_ONLY_PATHS` (System Temp, Prefetch) substitui a regra "só User Temp". Novo `COMMAND_CLEANUPS` + `run_command_cleanup()` para `npm cache clean --force`, `uv cache clean` e `Clear-RecycleBin` (pula se a ferramenta não existe; mede o ganho antes/depois; dry-run só mede).
+- `backend/profiles.py`: níveis ganham `clean_commands`; Mediana inclui os itens acima e o ajuste `hibernation` (movido de Alta; Alta herda).
+- `main.py`/`frontend`: `_clean_with_log(..., commands=)`, novos `--paths`, briefing lista caches/Lixeira e avisa que a hibernação off perde hibernação/inicialização rápida.
+- Testes e docs atualizados.
+
 ## Blacklist ampliada para apps de inicialização
 
 - `backend/tweaks/third_party.py`

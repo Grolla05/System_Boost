@@ -3,7 +3,9 @@ import sys
 
 from backend.privileges import is_admin
 from backend.tweaks.catalog import get_tweak
-from backend.cleaner import get_temp_paths, clean_directory, format_size
+from backend.cleaner import (
+    ADMIN_ONLY_PATHS, COMMAND_CLEANUPS, get_temp_paths, clean_directory, format_size, run_command_cleanup,
+)
 from backend.tweaks import list_status, list_applied, apply_tweak, undo_tweak, undo_all, TweakError
 from backend import profiles
 from backend.logger import get_logger, setup_logging
@@ -35,7 +37,9 @@ from frontend.cli import (
 
 log = get_logger("main")
 
-PATH_CHOICES = ("User Temp", "System Temp", "Prefetch")
+PATH_CHOICES = (
+    "User Temp", "System Temp", "Prefetch", "SquirrelTemp", "Gradle Cache", "Go Build Cache", "User Cache",
+)
 COMMANDS = ("menu", "clean", "list", "apply", "undo", "info")
 
 
@@ -103,9 +107,27 @@ def _tweak_event_handler(mlog):
     return handle
 
 
-def _clean_with_log(mlog, paths, dry_run=False):
-    """Cleans each folder, logging one line per folder. Returns (total_formatted, total_bytes)."""
+def _clean_with_log(mlog, paths, dry_run=False, commands=()):
+    """Cleans each folder, then runs each command cleanup, logging one line per item.
+    Returns (total_formatted, total_bytes)."""
     total = 0
+    for cleanup_id in commands:
+        label = COMMAND_CLEANUPS[cleanup_id][0]
+        key = f"clean:{cleanup_id}"
+        mlog.start(key, f"{'Analisando' if dry_run else 'Limpando'} {label}")
+        try:
+            status, freed = run_command_cleanup(cleanup_id, dry_run=dry_run)
+        except Exception as exc:
+            log.exception("limpeza '%s': erro inesperado", cleanup_id)
+            mlog.finish(key, "fail", str(exc))
+            continue
+        if status == "skip":
+            mlog.finish(key, "skip", "não instalado")
+        elif status == "fail":
+            mlog.finish(key, "fail", "falhou")
+        else:
+            total += freed
+            mlog.finish(key, "ok", f"{format_size(freed)} {'seriam liberados' if dry_run else 'liberados'}")
     for name, path in paths.items():
         key = f"clean:{name}"
         mlog.start(key, f"{'Analisando' if dry_run else 'Limpando'} {name}")
@@ -216,10 +238,11 @@ def cmd_menu(args):
             continue
         log.info("menu: nível escolhido='%s'", level_id)
         clean_paths = profiles.resolve_clean_paths(level_id)
+        clean_commands = profiles.LEVELS[level_id]["clean_commands"]
         applicable_ids, skipped_ids = profiles.resolve_tweak_plan(level_id)
 
         if not args.yes:
-            proceed = show_level_summary(level_id, clean_paths, applicable_ids, skipped_ids)
+            proceed = show_level_summary(level_id, clean_paths, applicable_ids, skipped_ids, clean_commands)
             if not proceed:
                 log.info("menu: usuário cancelou na confirmação")
                 return
@@ -227,7 +250,7 @@ def cmd_menu(args):
         level_label = profiles.LEVELS[level_id]["label"]
         with show_mission_log(f"STAGE: {level_label.upper()}") as mlog:
             log.info("etapa limpeza: iniciando")
-            total_formatted, total_bytes = _clean_with_log(mlog, clean_paths)
+            total_formatted, total_bytes = _clean_with_log(mlog, clean_paths, commands=clean_commands)
             log.info("etapa limpeza: concluída, total liberado=%s", total_formatted)
             log.info("etapa ajustes: iniciando")
             tweak_results = profiles.apply_level_tweaks(level_id, on_event=_tweak_event_handler(mlog))
@@ -250,7 +273,7 @@ def cmd_clean(args):
     all_paths = get_temp_paths()
 
     if not admin_status:
-        paths_to_clean = {k: v for k, v in all_paths.items() if k == "User Temp"}
+        paths_to_clean = {k: v for k, v in all_paths.items() if k not in ADMIN_ONLY_PATHS}
     else:
         paths_to_clean = all_paths
 

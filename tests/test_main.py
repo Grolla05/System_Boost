@@ -220,6 +220,21 @@ def test_clean_with_log_reports_each_folder(monkeypatch, tmp_path):
         ("finish", "clean:User Temp", "ok"), ("finish", "clean:System Temp", "ok")]
 
 
+def test_clean_with_log_runs_command_cleanups(monkeypatch):
+    import main
+
+    mlog = _FakeLog()
+    results = {"npm-cache": ("ok", 2048), "uv-cache": ("skip", 0), "recycle-bin": ("fail", 0)}
+    monkeypatch.setattr(main, "run_command_cleanup", lambda cid, dry_run=False: results[cid])
+
+    _, total_bytes = main._clean_with_log(mlog, {}, commands=tuple(results))
+
+    assert total_bytes == 2048
+    assert [c[:3] for c in mlog.calls if c[0] == "finish"] == [
+        ("finish", "clean:npm-cache", "ok"), ("finish", "clean:uv-cache", "skip"),
+        ("finish", "clean:recycle-bin", "fail")]
+
+
 def test_driver_step_with_log_shows_notice_as_warning_line(monkeypatch):
     import main
 

@@ -95,8 +95,8 @@ def show_machine_info(info, wait=False):
 def show_level_menu():
     return display_level_menu(console)
 
-def show_level_summary(level_id, clean_paths, applicable_ids, skipped_ids):
-    return display_level_summary(console, level_id, clean_paths, applicable_ids, skipped_ids)
+def show_level_summary(level_id, clean_paths, applicable_ids, skipped_ids, clean_commands=()):
+    return display_level_summary(console, level_id, clean_paths, applicable_ids, skipped_ids, clean_commands)
 
 def show_driver_update(update_func, dry_run=False):
     return run_driver_update_with_progress(console, update_func, dry_run=dry_run)
