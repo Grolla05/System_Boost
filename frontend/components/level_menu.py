@@ -216,6 +216,10 @@ def display_level_summary(console: Console, level_id, clean_paths, applicable_id
     if clean_commands:
         labels = [cleaner.COMMAND_CLEANUPS[c][0] for c in clean_commands]
         lines.append("[bold accent]Caches/Lixeira:[/bold accent] " + ", ".join(labels))
+        if "recycle-bin" in clean_commands:
+            lines.append(
+                "[warning]Lixeira será esvaziada de vez (todas as unidades, inclusive D: e OneDrive): "
+                "os arquivos não poderão ser restaurados.[/warning]")
     lines += ["", "[bold accent]Ajustes a aplicar:[/bold accent]"]
 
     for tweak_id in applicable_ids:

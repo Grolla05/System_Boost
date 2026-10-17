@@ -1,5 +1,11 @@
 # Changes
 
+## Lixeira esvaziada já no Stage 1
+
+- `backend/profiles.py`: `recycle-bin` passa de Mediana para Leve (Stage 2+ herdam). Ordem em Mediana: Lixeira, npm, uv.
+- `frontend/components/level_menu.py`: briefing avisa que a Lixeira (todas as unidades) é esvaziada de vez, sem restauração.
+- Testes e docs atualizados.
+
 ## Stage 2: "Lista C" de limpeza sem mover
 
 - `backend/cleaner.py`: `get_temp_paths()` ganha `SquirrelTemp`, `Gradle Cache` (`~/.gradle/caches`), `Go Build Cache` e `User Cache` (`~/.cache`); `ADMIN_ONLY_PATHS` (System Temp, Prefetch) substitui a regra "só User Temp". Novo `COMMAND_CLEANUPS` + `run_command_cleanup()` para `npm cache clean --force`, `uv cache clean` e `Clear-RecycleBin` (pula se a ferramenta não existe; mede o ganho antes/depois; dry-run só mede).

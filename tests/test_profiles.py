@@ -301,8 +301,8 @@ def test_mediana_adds_power_plan_offers_and_mouse_acceleration_over_leve():
 
 def test_mediana_includes_lista_c_cleanups_and_alta_inherits_them():
     mediana, alta = profiles.LEVELS["mediana"], profiles.LEVELS["alta"]
-    assert profiles.LEVELS["leve"]["clean_commands"] == ()
-    assert mediana["clean_commands"] == ("npm-cache", "uv-cache", "recycle-bin")
+    assert profiles.LEVELS["leve"]["clean_commands"] == ("recycle-bin",)
+    assert mediana["clean_commands"] == ("recycle-bin", "npm-cache", "uv-cache")
     for name in ("SquirrelTemp", "Gradle Cache", "Go Build Cache", "User Cache"):
         assert name in mediana["clean_paths"]
     assert alta["clean_commands"] == mediana["clean_commands"]
