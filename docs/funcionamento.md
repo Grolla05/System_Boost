@@ -306,8 +306,8 @@ Na tela de conclusão (passo 4), **Enter** (ou qualquer tecla além de ESC) ence
 
 | Nível | Pastas limpas | Ajustes aplicados |
 |---|---|---|
-| Leve | User Temp | `startup_apps`, `third_party_services`, `third_party_tasks` |
-| Mediana | + System Temp, SquirrelTemp, Gradle/Go/User Cache, npm/uv cache, Lixeira | + `power_plan`, `recommendations_offers`, `mouse_acceleration`, `hibernation` |
+| Leve | User Temp, Lixeira | `startup_apps`, `third_party_services`, `third_party_tasks` |
+| Mediana | + System Temp, SquirrelTemp, Gradle/Go/User Cache, npm/uv cache | + `power_plan`, `recommendations_offers`, `mouse_acceleration`, `hibernation` |
 | Alta | + Prefetch | + `visual_effects`, `indexing` |
 | Extrema | (mesmas de Alta) | + `telemetry`, `sysmain`, `compat_appraiser` |
 
