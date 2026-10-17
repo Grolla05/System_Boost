@@ -28,22 +28,22 @@ LEVELS = {
         "id": "leve",
         "label": "Leve",
         "description": (
-            "Limpa o temp do usuário e desativa apps, serviços e tarefas de terceiros "
-            "que sobem com o sistema."
+            "Limpa o temp do usuário, esvazia a Lixeira e desativa apps, serviços e tarefas "
+            "de terceiros que sobem com o sistema."
         ),
         "clean_paths": ("User Temp",),
-        "clean_commands": (),
+        "clean_commands": ("recycle-bin",),
         "tweak_ids": ("startup_apps", "third_party_services", "third_party_tasks"),
     },
 }
 LEVELS["mediana"] = _extend(
     "leve", "mediana", "Mediana",
     "STAGE 1 + limpeza do Temp do Windows e de caches (Squirrel, npm, uv, Gradle, Go, .cache), "
-    "Lixeira esvaziada, hibernação desativada (apaga o hiberfil.sys; perde hibernação e "
+    "hibernação desativada (apaga o hiberfil.sys; perde hibernação e "
     "inicialização rápida), plano de energia Alto Desempenho, ofertas/recomendações do Windows "
     "desligadas e precisão do ponteiro desativada.",
     clean_paths=("System Temp", "SquirrelTemp", "Gradle Cache", "Go Build Cache", "User Cache"),
-    clean_commands=("npm-cache", "uv-cache", "recycle-bin"),
+    clean_commands=("npm-cache", "uv-cache"),
     tweak_ids=("power_plan", "recommendations_offers", "mouse_acceleration", "hibernation"),
 )
 LEVELS["alta"] = _extend(
