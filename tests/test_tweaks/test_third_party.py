@@ -92,3 +92,19 @@ def test_protected_software_is_never_third_party(name, command):
 def test_ordinary_apps_stay_flagged():
     assert third_party.is_third_party("Discord", r"C:\Users\x\AppData\Local\Discord\Discord.exe")
     assert third_party.is_third_party("RamDisk", r"C:\Tools\ramdisk\ramdisk.exe")
+
+
+def test_user_folder_name_does_not_protect_an_app():
+    assert third_party.is_third_party("Spotify", r"C:\Users\Hpereira\AppData\Roaming\Spotify\Spotify.exe")
+
+
+def test_intellij_is_not_mistaken_for_intel():
+    assert third_party.is_third_party("IntelliJ", r"C:\Program Files\JetBrains\IntelliJ\idea64.exe")
+
+
+def test_intel_software_stays_protected():
+    assert not third_party.is_third_party("IntelTechnologyAccess", r"C:\Program Files\Intel\TechAccess\ita.exe")
+
+
+def test_vendor_folder_inside_the_user_profile_still_protects():
+    assert not third_party.is_third_party("Sync", r"C:\Users\x\AppData\Local\Dropbox\sync.exe")

@@ -287,7 +287,7 @@ def cmd_menu(args):
 
         outcome = show_level_completion(
             level_label, total_formatted, tweak_results,
-            close_terminal=not args.yes, skip_wait=args.yes, driver_summary=driver_summary,
+            close_terminal=not args.yes, skip_wait=args.yes, driver_summary=driver_summary, clear=False,
         )
         if outcome != "back":
             return
@@ -323,7 +323,7 @@ def cmd_clean(args):
     close_terminal = not (args.no_close or args.dry_run or args.yes)
     show_completion(
         total_formatted, dry_run=args.dry_run, close_terminal=close_terminal,
-        skip_wait=args.yes, driver_summary=driver_summary,
+        skip_wait=args.yes, driver_summary=driver_summary, clear=False,
     )
 
 

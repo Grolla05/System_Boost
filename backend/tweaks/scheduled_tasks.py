@@ -15,24 +15,31 @@ _NAMESPACE = "{http://schemas.microsoft.com/windows/2004/02/mit/task}"
 class ScheduledTaskTweak(Tweak):
     """Enables/disables a Windows scheduled task via schtasks.exe."""
 
-    def __init__(self, tweak_id, label, description, task_path, requires_admin=True):
-        """Stores the task's full path (as schtasks /TN expects it)."""
+    def __init__(self, tweak_id, label, description, task_path, requires_admin=True, fallback_paths=()):
+        """Stores the task's full path (as schtasks /TN expects it) and other names it has on other builds."""
         self.id = tweak_id
         self.label = label
         self.description = description
         self.task_path = task_path
+        self.fallback_paths = fallback_paths
         self.requires_admin = requires_admin
+
+    def _query(self):
+        """Returns (path, schtasks result) for the first of the task's names that exists on this build."""
+        for path in (self.task_path, *self.fallback_paths):
+            result = subprocess.run(
+                [system_exe("schtasks"), "/Query", "/TN", path, "/XML", "ONE"],
+                capture_output=True, check=False,
+            )
+            log.debug("schtasks /Query %s: returncode=%s", path, result.returncode)
+            if result.returncode == 0:
+                return path, result
+            log.error("schtasks /Query: stderr=%r", result.stderr)
+        raise TweakError(f"Tarefa agendada '{self.task_path}' não encontrada.")
 
     def get_current_value(self):
         """Queries the task's XML definition and returns 'Enabled' or 'Disabled'."""
-        result = subprocess.run(
-            [system_exe("schtasks"), "/Query", "/TN", self.task_path, "/XML", "ONE"],
-            capture_output=True, check=False,
-        )
-        log.debug("schtasks /Query %s: returncode=%s", self.task_path, result.returncode)
-        if result.returncode != 0:
-            log.error("schtasks /Query: stderr=%r", result.stderr)
-            raise TweakError(f"Tarefa agendada '{self.task_path}' não encontrada.")
+        _, result = self._query()
         try:
             # schtasks declares encoding="UTF-16" in the XML prolog, but the bytes
             # captured through a redirected pipe are actually UTF-8 — decode as text
@@ -61,11 +68,12 @@ class ScheduledTaskTweak(Tweak):
     def _set_state(self, state):
         """Runs schtasks /Change to enable or disable the task."""
         flag = "/Enable" if state == "Enabled" else "/Disable"
+        path = self._query()[0] if self.fallback_paths else self.task_path
         result = subprocess.run(
-            [system_exe("schtasks"), "/Change", "/TN", self.task_path, flag],
+            [system_exe("schtasks"), "/Change", "/TN", path, flag],
             capture_output=True, check=False,
         )
-        log.debug("schtasks /Change %s %s: returncode=%s", self.task_path, flag, result.returncode)
+        log.debug("schtasks /Change %s %s: returncode=%s", path, flag, result.returncode)
         if result.returncode != 0:
             log.error("schtasks /Change: stdout=%r stderr=%r", result.stdout, result.stderr)
-            raise TweakError(f"Falha ao alterar tarefa '{self.task_path}'.")
+            raise TweakError(f"Falha ao alterar tarefa '{path}'.")

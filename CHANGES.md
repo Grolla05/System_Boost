@@ -1,5 +1,14 @@
 # Changes
 
+## Bugs funcionais
+
+- `third_party.py`: pasta do usuário fica fora do filtro (`hp` não casa `Hpereira`) e `intel` não casa `IntelliJ`.
+- `services.py`: `delayed-auto` é lido do registro e restaurado no undo.
+- `ScheduledTaskTweak`: `fallback_paths` cobre o nome da tarefa em outras builds; `compat_appraiser` aceita com e sem `Exp`.
+- Stage 4 tem descrição; mensagens citam o exe quando empacotado (`cli_command()`).
+- Mission log fica acima do resumo; briefing avisa sobre Prefetch.
+- `find_product`: chassi define série de notebook, para GPUs sem "Laptop" no nome.
+
 ## Undo confiável
 
 - `state_store.py`: arquivo danificado gera `StateCorruptError`, fica copiado em `.corrupt-*` e bloqueia escrita; cada save mantém `.bak`.

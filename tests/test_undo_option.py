@@ -362,3 +362,23 @@ def test_briefing_caps_long_item_lists(monkeypatch):
     assert "item29" in text
     assert "item30" not in text
     assert "e mais 5" in text
+
+
+def test_hint_names_the_exe_when_frozen(monkeypatch):
+    import sys
+
+    from backend._system import cli_command
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", r"C:\Program Files\System Boost\System Boost.exe")
+
+    assert cli_command() == '"System Boost.exe"'
+
+
+def test_summary_warns_about_prefetch():
+    out, console = _console()
+
+    with patch("rich.prompt.Confirm.ask", return_value=True):
+        level_menu.display_level_summary(console, "alta", {"Prefetch": "x"}, [], [])
+
+    assert "Prefetch será limpo" in out.getvalue()

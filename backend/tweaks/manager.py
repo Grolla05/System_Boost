@@ -1,4 +1,5 @@
 """Applies and undoes reversible tweaks, coordinating catalog, state, and admin checks."""
+from backend._system import cli_command
 from backend.logger import get_logger
 from backend.privileges import is_admin
 
@@ -27,7 +28,7 @@ def apply_tweak(tweak_id, state_path=None):
     if state_store.get_applied(tweak_id, path=state_path) is not None:
         log.info("apply '%s': já consta como aplicado no state file", tweak_id)
         raise TweakAlreadyApplied(
-            f"'{tweak_id}' já está aplicado. Rode `python main.py undo {tweak_id}` para desfazer."
+            f"'{tweak_id}' já está aplicado. Rode `{cli_command()} undo {tweak_id}` para desfazer."
         )
     previous_value = tweak.get_current_value()
     log.debug("apply '%s': valor atual=%r", tweak_id, previous_value)

@@ -13,7 +13,7 @@ from .base import Tweak, TweakError
 log = get_logger("tweaks.services")
 
 _INT_TO_START_TYPE = {0: "boot", 1: "system", 2: "auto", 3: "demand", 4: "disabled"}
-_STARTABLE_TYPES = ("boot", "system", "auto")
+_STARTABLE_TYPES = ("boot", "system", "auto", "delayed-auto")
 
 
 class ServiceStateTweak(Tweak):
@@ -37,11 +37,21 @@ class ServiceStateTweak(Tweak):
             raise TweakError(f"Serviço '{self.service_name}' não encontrado: {exc}") from exc
         try:
             value, _ = winreg.QueryValueEx(key, "Start")
+            if value == 2 and self._is_delayed(key):
+                return "delayed-auto"
         except (FileNotFoundError, OSError) as exc:
             raise TweakError(f"Não foi possível ler o serviço '{self.service_name}': {exc}") from exc
         finally:
             winreg.CloseKey(key)
         return _INT_TO_START_TYPE.get(value, str(value))
+
+    @staticmethod
+    def _is_delayed(key):
+        """True if the service key marks an automatic start as delayed (absent means not delayed)."""
+        try:
+            return winreg.QueryValueEx(key, "DelayedAutostart")[0] == 1
+        except (FileNotFoundError, OSError):
+            return False
 
     def apply(self):
         """Sets the service's start type to target_start_type and stops it."""

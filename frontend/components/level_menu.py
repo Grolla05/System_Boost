@@ -7,6 +7,7 @@ from rich.panel import Panel
 from rich.prompt import Confirm, IntPrompt
 from rich.text import Text
 
+from backend._system import cli_command
 from backend.profiles import LEVEL_ORDER, LEVELS, preview_tweak_items
 from backend.tweaks import catalog as tweaks_catalog
 from ..audio import play_blip, play_select
@@ -19,9 +20,13 @@ UNDO_CHOICE = "undo"
 # Returned on ESC/Q: leave without running anything.
 EXIT_CHOICE = "exit"
 _OPTIONS = tuple(LEVEL_ORDER) + (INFO_CHOICE, UNDO_CHOICE)
-REVERT_HINT = "opção 6 do menu ou `python main.py undo --all`"
+REVERT_HINT = f"opção 6 do menu ou `{cli_command()} undo --all`"
 _DIGIT_KEYS = tuple(str(i) for i in range(1, len(_OPTIONS) + 1))
 _PREVIEW_LIMIT = 30
+PREFETCH_WARNING = (
+    "[warning]Prefetch será limpo: o Windows recria automaticamente, "
+    "mas isso pode afetar o próximo boot.[/warning]"
+)
 
 
 def _is_interactive_terminal() -> bool:
@@ -225,6 +230,8 @@ def display_level_summary(console: Console, level_id, clean_paths, applicable_id
             lines.append(
                 "[warning]Lixeira será esvaziada de vez (todas as unidades, inclusive D: e OneDrive): "
                 "os arquivos não poderão ser restaurados.[/warning]")
+    if "Prefetch" in clean_paths:
+        lines.append(PREFETCH_WARNING)
     lines += ["", "[bold accent]Ajustes a aplicar:[/bold accent]"]
 
     preview = preview_tweak_items(applicable_ids)
@@ -271,9 +278,6 @@ def display_clean_confirm(console: Console, paths):
     """Lists the folders about to be cleaned and asks for confirmation."""
     lines = ["[bold accent]Pastas a limpar:[/bold accent] " + (", ".join(sorted(paths)) or "nenhuma")]
     if "Prefetch" in paths:
-        lines.append(
-            "[warning]Prefetch será limpo: o Windows recria automaticamente, "
-            "mas isso pode afetar o próximo boot.[/warning]"
-        )
+        lines.append(PREFETCH_WARNING)
     console.print(Panel("\n".join(lines), box=box.DOUBLE, border_style="accent", expand=False, padding=(1, 3)))
     return Confirm.ask("[bold success]Limpar agora?[/bold success]", default=False)

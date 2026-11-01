@@ -15,7 +15,7 @@ EXCEPTION_NAMES = (
     "csfalcon", "sentinel", "cylance", "cisco", "fortinet", "forticlient", "paloalto", "f-secure",
     "fsecure", "comodo", "panda", "gdata", "zonealarm",
     # hardware drivers / peripherals / audio
-    "nvidia", "nv", "amd", "radeon", "intel", "realtek", "rtk", "synaptics", "elan", "logitech",
+    "nvidia", "nv", "amd", "radeon", "realtek", "rtk", "synaptics", "elan", "logitech",
     "logi", "razer", "corsair", "steelseries", "asus", "dell", "hp", "lenovo", "msi", "bluetooth",
     "touchpad", "fingerprint",
     # cloud sync
@@ -41,9 +41,15 @@ EXCEPTION_NAMES = (
 # Matched anywhere in a word: these usually come glued to a vendor name (OpenVPN, GoogleUpdater).
 ANYWHERE_NAMES = ("vpn", "update", "trendmicro")
 
+# 'intel' on its own, not the start of IntelliJ, IntelliSense or 'intelligent'.
+_INTEL = r"(?<![a-z])intel(?!li)"
+
+# The account folder says nothing about the software: 'hp' must not match C:\\Users\\Hpereira.
+_USER_DIR_RE = re.compile(r"^[a-z]:\\users\\[^\\]+\\", re.IGNORECASE)
+
 
 def _compile(names, anywhere=()):
-    pattern = r"(?<![a-z])(?:" + "|".join(re.escape(n) for n in names) + ")"
+    pattern = r"(?<![a-z])(?:" + "|".join(re.escape(n) for n in names) + ")|" + _INTEL
     if anywhere:
         pattern += "|" + "|".join(re.escape(n) for n in anywhere)
     return re.compile(pattern, re.IGNORECASE)
@@ -85,5 +91,5 @@ def is_third_party(name, command, display=None):
         return False
     if _is_windows_owned(executable):
         return False
-    haystack = " ".join(part for part in (name, display, executable) if part)
+    haystack = " ".join(part for part in (name, display, _USER_DIR_RE.sub("", executable)) if part)
     return _EXCEPTION_RE.search(haystack) is None

@@ -23,6 +23,7 @@ PRODUCTS = {
     "129": (
         '<LookupValueSearch><LookupValues>'
         '<LookupValue ParentID="129"><Name>GeForce RTX 4060 Laptop GPU</Name><Value>1007</Value></LookupValue>'
+        '<LookupValue ParentID="129"><Name>GeForce RTX 4050</Name><Value>1008</Value></LookupValue>'
         '</LookupValues></LookupValueSearch>'
     ).encode(),
     "112": b"<LookupValueSearch><LookupValues></LookupValues></LookupValueSearch>",
@@ -280,3 +281,8 @@ def test_install_rejects_untrusted_url_before_downloading(monkeypatch, tmp_path)
 def test_flicker_warning_tells_user_the_screen_may_flash():
     text = nvidia_driver.FLICKER_WARNING.lower()
     assert "tela" in text and "pisc" in text
+
+
+def test_find_product_uses_notebook_series_when_chassis_is_portable(monkeypatch):
+    monkeypatch.setattr(nvidia_driver, "_fetch", fake_fetch())
+    assert nvidia_driver.find_product("NVIDIA GeForce RTX 4050", notebook=True) == ("129", "1008")
