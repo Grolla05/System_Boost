@@ -63,7 +63,7 @@ def show_loading(paths, clean_func, format_func, dry_run=False):
 
 def show_mission_log(title):
     """Returns a MissionLog context manager: live step-by-step log (running / OK / FAIL / SKIP)."""
-    return MissionLog(console, title)
+    return MissionLog(console, title, keep=True)
 
 def show_completion(total_formatted, dry_run=False, close_terminal=True, skip_wait=False, driver_summary=None, clear=True):
     display_completion_screen(

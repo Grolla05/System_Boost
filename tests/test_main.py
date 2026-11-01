@@ -378,3 +378,30 @@ def test_esc_in_level_menu_returns_exit(monkeypatch):
     monkeypatch.setattr(level_menu, "_render_menu_panel", lambda idx: "menu")
 
     assert level_menu.display_level_menu(Console(file=StringIO())) == level_menu.EXIT_CHOICE
+
+
+def test_mission_log_stays_visible_above_the_summary(monkeypatch):
+    import main
+
+    seen = {}
+    monkeypatch.setattr(main, "show_welcome", lambda skip_wait=False: None)
+    monkeypatch.setattr(main, "show_level_menu", lambda: "leve")
+    monkeypatch.setattr(main.profiles, "resolve_clean_paths", lambda level: {})
+    monkeypatch.setattr(main.profiles, "resolve_tweak_plan", lambda level: ([], []))
+    monkeypatch.setattr(main.profiles, "apply_level_tweaks", lambda level, on_event=None: [])
+    monkeypatch.setattr(main, "_restore_point_step", lambda mlog: None)
+    monkeypatch.setattr(main, "_clean_with_log", lambda *a, **k: ("0 B", 0))
+
+    class Log:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(main, "show_mission_log", lambda title: Log())
+    monkeypatch.setattr(main, "show_level_completion", lambda *a, **k: seen.update(k) or "exit")
+
+    main.cmd_menu(main.parse_args(["menu", "-y"]))
+
+    assert seen["clear"] is False

@@ -55,7 +55,7 @@ LEVELS["alta"] = _extend(
 )
 LEVELS["extrema"] = _extend(
     "alta", "extrema", "Extrema",
-    "STAGE 3 + ",
+    "STAGE 3 + telemetria no mínimo, SysMain (Superfetch) e tarefa Compatibility Appraiser desativados.",
     tweak_ids=("telemetry", "sysmain", "compat_appraiser"),
 )
 

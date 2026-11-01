@@ -17,6 +17,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from backend._powershell import PS_PRELUDE, PowerShellError, run_powershell
+from backend.hardware import is_notebook
 from backend.logger import get_logger
 
 log = get_logger("nvidia_driver")
@@ -133,10 +134,13 @@ def _normalize_gpu_name(name):
     return name[len("nvidia "):] if name.startswith("nvidia ") else name
 
 
-def find_product(gpu_name):
-    """Resolves a Win32_VideoController name to NVIDIA's (series id, product id)."""
+def find_product(gpu_name, notebook=False):
+    """Resolves a Win32_VideoController name to NVIDIA's (series id, product id).
+
+    Older notebook GPUs have no "Laptop" in the name, so the caller passes the chassis too.
+    """
     wanted = _normalize_gpu_name(gpu_name)
-    notebook = "laptop" in wanted or "notebook" in wanted
+    notebook = notebook or "laptop" in wanted or "notebook" in wanted
     model = re.search(r"\b(\d{2})\d{2}\b", wanted)
     prefix = f"{model.group(1)} series" if model else None
 
@@ -195,7 +199,7 @@ def check_update():
     if installed is None:
         raise NvidiaDriverError(f"versão do driver instalado desconhecida ({gpu['driver_version']})")
     try:
-        psid, pfid = find_product(gpu["name"])
+        psid, pfid = find_product(gpu["name"], notebook=is_notebook())
         latest, url = lookup_latest(psid, pfid)
     except NvidiaDriverError:
         raise

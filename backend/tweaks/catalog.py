@@ -19,8 +19,9 @@ from .third_party_tasks import ThirdPartyTasksTweak
 _VISUAL_EFFECTS_KEY = "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects"
 _TELEMETRY_KEY = "SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection"
 # Confirmed via `schtasks /Query /FO CSV` on the dev machine — this build's task
-# carries an "Exp" suffix not present on older Windows releases.
+# carries an "Exp" suffix not present on older Windows releases, so both names are tried.
 _COMPAT_APPRAISER_TASK = r"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser Exp"
+_COMPAT_APPRAISER_TASK_OLD = r"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser"
 
 
 def _build_catalog():
@@ -70,6 +71,7 @@ def _build_catalog():
             label="Desativar Compatibility Appraiser",
             description="Desativa a tarefa agendada de verificação de compatibilidade do Windows.",
             task_path=_COMPAT_APPRAISER_TASK,
+            fallback_paths=(_COMPAT_APPRAISER_TASK_OLD,),
         ),
     }
 

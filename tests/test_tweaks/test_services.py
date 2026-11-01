@@ -78,3 +78,22 @@ def test_apply_raises_on_nonzero_exit(monkeypatch, fake_winreg, fake_run):
 
     with pytest.raises(TweakError):
         tweak.apply()
+
+
+def test_get_current_value_recognizes_delayed_auto(monkeypatch, fake_winreg, fake_run):
+    _patch(monkeypatch, fake_winreg, fake_run)
+    key = "SYSTEM\\CurrentControlSet\\Services\\SysMain"
+    fake_winreg.seed(fake_winreg.HKEY_LOCAL_MACHINE, key, "Start", 2)
+    fake_winreg.seed(fake_winreg.HKEY_LOCAL_MACHINE, key, "DelayedAutostart", 1)
+
+    assert _make_tweak().get_current_value() == "delayed-auto"
+
+
+def test_undo_restores_delayed_auto_and_starts_service(monkeypatch, fake_winreg, fake_run):
+    _patch(monkeypatch, fake_winreg, fake_run)
+
+    _make_tweak().undo("delayed-auto")
+
+    assert fake_run.calls == [
+        ["sc", "config", "SysMain", "start=", "delayed-auto"], ["sc", "start", "SysMain"],
+    ]

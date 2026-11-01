@@ -82,3 +82,56 @@ def test_apply_raises_on_nonzero_exit(monkeypatch, fake_run):
 
     with pytest.raises(TweakError):
         tweak.apply()
+
+
+_OTHER_PATH = _TASK_PATH + " Exp"
+
+
+def _with_fallback():
+    return ScheduledTaskTweak("compat_appraiser", "x", "x", task_path=_OTHER_PATH, fallback_paths=(_TASK_PATH,))
+
+
+def _only_task_exists(module, monkeypatch, existing):
+    calls = []
+
+    class Result:
+        stdout = _XML_ENABLED
+        stderr = b""
+
+        def __init__(self, returncode):
+            self.returncode = returncode
+
+    def run(cmd, **kwargs):
+        calls.append(cmd)
+        return Result(1 if cmd[1] == "/Query" and cmd[3] != existing else 0)
+
+    monkeypatch.setattr(module.subprocess, "run", run)
+    return calls
+
+
+def test_fallback_name_is_used_when_first_task_does_not_exist(monkeypatch, fake_run):
+    module = _patch(monkeypatch, fake_run)
+    calls = _only_task_exists(module, monkeypatch, _TASK_PATH)
+    tweak = _with_fallback()
+
+    assert tweak.get_current_value() == "Enabled"
+    tweak.apply()
+
+    assert calls[-1][1:4] == ["/Change", "/TN", _TASK_PATH]
+
+
+def test_undo_finds_the_task_by_its_fallback_name(monkeypatch, fake_run):
+    module = _patch(monkeypatch, fake_run)
+    calls = _only_task_exists(module, monkeypatch, _TASK_PATH)
+
+    _with_fallback().undo("Enabled")
+
+    assert calls[-1][1:5] == ["/Change", "/TN", _TASK_PATH, "/Enable"]
+
+
+def test_error_when_no_name_exists(monkeypatch, fake_run):
+    module = _patch(monkeypatch, fake_run)
+    _only_task_exists(module, monkeypatch, "nenhuma")
+
+    with pytest.raises(TweakError):
+        _with_fallback().get_current_value()

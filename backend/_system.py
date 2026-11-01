@@ -2,6 +2,7 @@
 be resolved: Windows would look in the working directory and on the user's PATH first."""
 import ctypes
 import os
+import sys
 
 _MAX_PATH = 260
 
@@ -17,6 +18,13 @@ def _system_directory():
 def system_exe(name):
     """Returns the full path of a System32 tool, e.g. system_exe('sc') -> ...\\System32\\sc.exe."""
     return os.path.join(_system_directory(), f"{name}.exe")
+
+
+def cli_command():
+    """Returns how the user invokes this tool, for messages: the exe when frozen, else the script."""
+    if getattr(sys, "frozen", False):
+        return f'"{os.path.basename(sys.executable)}"'
+    return "python main.py"
 
 
 def powershell_exe():

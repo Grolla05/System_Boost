@@ -187,6 +187,12 @@ def _classify_chassis(chassis, battery):
     return "Notebook" if battery else "Desktop"
 
 
+def is_notebook():
+    """True if the chassis (or a battery) says this is a portable machine; False when unknown."""
+    cim = _read_cim()
+    return _classify_chassis(cim.get("chassis"), bool(cim.get("battery"))) == "Notebook"
+
+
 def get_machine_info():
     """Collects the machine's hardware/OS summary. Never raises; unknown fields stay None/[]."""
     info = MachineInfo()
