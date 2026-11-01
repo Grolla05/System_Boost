@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentação
+    url: https://github.com/Grolla05/System_Boost/blob/main/docs/README.md
+    about: Guia do usuário, funcionalidades e FAQ
+  - name: Convenção de commits
+    url: https://github.com/Grolla05/System_Boost/blob/main/.github/COMMIT_CONVENTION.md
+    about: Padrão das mensagens de commit

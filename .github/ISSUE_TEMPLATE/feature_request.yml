@@ -1,0 +1,21 @@
+name: Pedido de funcionalidade
+description: Sugira uma ideia ou melhoria
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: Qual problema isso resolve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposta
+    attributes:
+      label: O que você propõe
+    validations:
+      required: true
+  - type: textarea
+    id: reversibilidade
+    attributes:
+      label: Como desfazer?
+      description: Se a ideia altera o Windows, explique como voltar ao estado anterior.
