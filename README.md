@@ -51,11 +51,12 @@ Pick a level and the tool shows exactly what it's about to clean and which tweak
 
 ### Driver updates
 
-`menu` and `clean` finish with a driver step: the tool asks Windows Update for pending driver updates and installs them one by one (Administrator required; otherwise the step is skipped). `--dry-run` only lists them; pass `--no-drivers` to skip the step. A reboot may be needed afterwards, and creating a restore point first is recommended.
+`menu` and `clean` ask before the driver step, which installs pending updates from Windows Update and NVIDIA one by one (Administrator required). `--drivers` answers yes, `--no-drivers` skips it, and `-y` alone never installs drivers. `--dry-run` only lists them. A reboot may be needed afterwards. A restore point is created before a run changes anything; if Windows refuses, the run continues with a warning.
 
 ```bash
 python main.py clean --dry-run -y   # list pending drivers, install nothing
 python main.py menu --no-drivers    # guided flow without the driver step
+python main.py clean -y --drivers   # unattended run that also installs drivers
 ```
 
 ### Machine spec sheet

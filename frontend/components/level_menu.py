@@ -15,6 +15,8 @@ from ._terminal import clear_screen, flush_input
 INFO_CHOICE = "info"
 # Returned when the user picks "desfazer ajustes" (reverts every applied tweak).
 UNDO_CHOICE = "undo"
+# Returned on ESC/Q: leave without running anything.
+EXIT_CHOICE = "exit"
 _OPTIONS = tuple(LEVEL_ORDER) + (INFO_CHOICE, UNDO_CHOICE)
 REVERT_HINT = "opção 6 do menu ou `python main.py undo --all`"
 _DIGIT_KEYS = tuple(str(i) for i in range(1, len(_OPTIONS) + 1))
@@ -149,7 +151,8 @@ def _render_menu_panel(selected_idx: int) -> Panel:
 def display_level_menu(console: Console):
     """Shows the 4 levels plus 'ver ficha' and 'desfazer ajustes' with arrow / number key navigation.
 
-    Returns the chosen level id, INFO_CHOICE (machine spec sheet) or UNDO_CHOICE (revert tweaks).
+    Returns the chosen level id, INFO_CHOICE (machine spec sheet), UNDO_CHOICE (revert tweaks)
+    or EXIT_CHOICE (ESC/Q).
     """
     if not _is_interactive_terminal():
         clear_screen(console)
@@ -188,7 +191,7 @@ def display_level_menu(console: Console):
             return _OPTIONS[selected_idx]
         elif key == "esc":
             play_select()
-            return _OPTIONS[selected_idx]
+            return EXIT_CHOICE
 
 
 def display_level_summary(console: Console, level_id, clean_paths, applicable_ids, skipped_ids, clean_commands=()):
@@ -234,6 +237,8 @@ def display_level_summary(console: Console, level_id, clean_paths, applicable_id
         if "hibernation" in applicable_ids:
             lines.append("[warning]Hibernação off: apaga o hiberfil.sys e perde hibernação/inicialização rápida.[/warning]")
 
+    lines += ["", "[dim]Um ponto de restauração é criado antes; se falhar, a missão continua com um aviso.[/dim]"]
+
     if skipped_ids:
         lines.append("")
         lines.append("[warning]Pulados (requer Administrador):[/warning]")
@@ -243,3 +248,24 @@ def display_level_summary(console: Console, level_id, clean_paths, applicable_id
     briefing_panel = Panel("\n".join(lines), box=box.DOUBLE, border_style="accent", expand=False, padding=(1, 3))
     console.print(briefing_panel)
     return Confirm.ask("[bold success]Iniciar missão?[/bold success]", default=True)
+
+
+def display_driver_confirm(console: Console):
+    """Asks before the driver step; declining (the default) leaves drivers untouched."""
+    console.print(
+        "\n[warning]Drivers: busca no Windows Update e na NVIDIA e instala o que estiver pendente. "
+        "O driver NVIDIA baixa cerca de 1 GB, a tela pode piscar e pode ser preciso reiniciar.[/warning]"
+    )
+    return Confirm.ask("[bold success]Atualizar drivers também?[/bold success]", default=False)
+
+
+def display_clean_confirm(console: Console, paths):
+    """Lists the folders about to be cleaned and asks for confirmation."""
+    lines = ["[bold accent]Pastas a limpar:[/bold accent] " + (", ".join(sorted(paths)) or "nenhuma")]
+    if "Prefetch" in paths:
+        lines.append(
+            "[warning]Prefetch será limpo: o Windows recria automaticamente, "
+            "mas isso pode afetar o próximo boot.[/warning]"
+        )
+    console.print(Panel("\n".join(lines), box=box.DOUBLE, border_style="accent", expand=False, padding=(1, 3)))
+    return Confirm.ask("[bold success]Limpar agora?[/bold success]", default=False)

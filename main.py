@@ -11,9 +11,13 @@ from backend import profiles
 from backend.logger import get_logger, setup_logging
 from backend.drivers import update_all_drivers
 from backend.hardware import get_machine_info
+from backend.restore_point import create_restore_point
 from frontend.cli import (
+    EXIT_CHOICE,
     INFO_CHOICE,
     UNDO_CHOICE,
+    show_clean_confirm,
+    show_driver_confirm,
     show_undo_confirm,
     show_undo_empty,
     show_undo_results,
@@ -47,14 +51,15 @@ def parse_args(argv=None):
     argv = sys.argv[1:] if argv is None else list(argv)
     if not argv:
         argv = ["menu"]
-    elif argv[0] not in COMMANDS and argv[0] not in ("-h", "--help"):
-        argv = ["clean"] + argv
+    elif argv[0] not in COMMANDS and argv[0] not in ("-h", "--help") and {"-n", "--dry-run"} & set(argv):
+        argv = ["clean"] + argv  # only a simulation may omit the subcommand: nothing is deleted
 
     parser = argparse.ArgumentParser(prog="boost", description="WinCleaner / System Boost")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     menu_parser = subparsers.add_parser("menu", help="Fluxo guiado: escolha um nível de otimização")
     menu_parser.add_argument("-y", "--yes", action="store_true", help="Pula confirmações (uso automatizado)")
+    menu_parser.add_argument("--drivers", action="store_true", help="Atualiza drivers ao final, sem perguntar")
     menu_parser.add_argument("--no-drivers", action="store_true", help="Não atualiza drivers ao final")
     menu_parser.add_argument("--no-sound", action="store_true", help="Desativa efeitos sonoros retrô 8-bit")
     menu_parser.add_argument("-p", "--palette", choices=("dmg", "pocket", "arcade"), help="Escolhe a paleta de cores retrô")
@@ -64,6 +69,7 @@ def parse_args(argv=None):
     clean_parser.add_argument("--paths", nargs="+", choices=PATH_CHOICES, help="Restringe a limpeza a pastas específicas")
     clean_parser.add_argument("-y", "--yes", action="store_true", help="Pula telas de confirmação (uso automatizado)")
     clean_parser.add_argument("--no-close", action="store_true", help="Não fecha o terminal ao final")
+    clean_parser.add_argument("--drivers", action="store_true", help="Atualiza drivers ao final, sem perguntar")
     clean_parser.add_argument("--no-drivers", action="store_true", help="Não atualiza drivers ao final")
     clean_parser.add_argument("--no-sound", action="store_true", help="Desativa efeitos sonoros retrô 8-bit")
     clean_parser.add_argument("-p", "--palette", choices=("dmg", "pocket", "arcade"), help="Escolhe a paleta de cores retrô")
@@ -140,6 +146,22 @@ def _clean_with_log(mlog, paths, dry_run=False, commands=()):
         total += freed
         mlog.finish(key, "ok", f"{format_size(freed)} {'seriam liberados' if dry_run else 'liberados'}")
     return format_size(total), total
+
+
+def _wants_drivers(args, dry_run=False):
+    """Drivers only change with explicit consent: --drivers or a yes at the prompt; -y never implies it."""
+    if args.no_drivers:
+        return False
+    if args.drivers or dry_run:  # a dry run only lists what is pending
+        return True
+    return False if args.yes else show_driver_confirm()
+
+
+def _restore_point_step(mlog):
+    """Takes a restore point; a failure is shown but doesn't stop the run."""
+    mlog.start("restore", "Criando ponto de restauração")
+    ok, note = create_restore_point()
+    mlog.finish("restore", "ok" if ok else "warn", note)
 
 
 def _run_driver_step(args, dry_run=False, mlog=None):
@@ -226,6 +248,9 @@ def cmd_menu(args):
 
     while True:
         level_id = show_level_menu()
+        if level_id == EXIT_CHOICE:
+            log.info("menu: usuário saiu")
+            return
         if level_id == INFO_CHOICE:
             if machine_info is None:
                 log.info("menu: lendo ficha da máquina")
@@ -246,16 +271,18 @@ def cmd_menu(args):
             if not proceed:
                 log.info("menu: usuário cancelou na confirmação")
                 return
+        drivers = _wants_drivers(args)
 
         level_label = profiles.LEVELS[level_id]["label"]
         with show_mission_log(f"STAGE: {level_label.upper()}") as mlog:
+            _restore_point_step(mlog)
             log.info("etapa limpeza: iniciando")
             total_formatted, total_bytes = _clean_with_log(mlog, clean_paths, commands=clean_commands)
             log.info("etapa limpeza: concluída, total liberado=%s", total_formatted)
             log.info("etapa ajustes: iniciando")
             tweak_results = profiles.apply_level_tweaks(level_id, on_event=_tweak_event_handler(mlog))
             log.info("etapa ajustes: resultados=%s", tweak_results)
-            driver_summary = _run_driver_step(args, mlog=mlog)
+            driver_summary = _run_driver_step(args, mlog=mlog) if drivers else None
 
         outcome = show_level_completion(
             level_label, total_formatted, tweak_results,
@@ -280,16 +307,17 @@ def cmd_clean(args):
     if args.paths:
         paths_to_clean = {k: v for k, v in paths_to_clean.items() if k in args.paths}
 
-    if "Prefetch" in paths_to_clean and not args.yes:
-        console.print(
-            "[warning]Prefetch será limpo — o Windows recria automaticamente, "
-            "mas isso pode afetar o próximo boot.[/warning]"
-        )
+    if not args.yes and not args.dry_run and not show_clean_confirm(paths_to_clean):
+        log.info("clean: usuário cancelou na confirmação")
+        return
+    drivers = _wants_drivers(args, dry_run=args.dry_run)
 
     title = "SIMULAÇÃO" if args.dry_run else "LIMPEZA"
     with show_mission_log(title) as mlog:
+        if not args.dry_run:
+            _restore_point_step(mlog)
         total_formatted, total_bytes = _clean_with_log(mlog, paths_to_clean, dry_run=args.dry_run)
-        driver_summary = _run_driver_step(args, dry_run=args.dry_run, mlog=mlog)
+        driver_summary = _run_driver_step(args, dry_run=args.dry_run, mlog=mlog) if drivers else None
 
     close_terminal = not (args.no_close or args.dry_run or args.yes)
     show_completion(

@@ -256,6 +256,8 @@ def _patch_flow(monkeypatch, choices, applied=None, confirm=True, admin=True):
     calls = {"undo_all": 0, "confirm": [], "results": [], "empty": [], "errors": [], "summary": []}
     monkeypatch.setattr(main, "show_welcome", lambda skip_wait=False: None)
     monkeypatch.setattr(main, "show_level_menu", lambda it=iter(choices): next(it))
+    monkeypatch.setattr(main, "show_driver_confirm", lambda: False)
+    monkeypatch.setattr(main, "create_restore_point", lambda: (True, "ok"))
     monkeypatch.setattr(main, "is_admin", lambda: admin)
     monkeypatch.setattr(main, "list_applied", lambda: list(applied or []))
     monkeypatch.setattr(main, "show_undo_confirm", lambda a, admin: calls["confirm"].append((a, admin)) or confirm)

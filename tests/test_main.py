@@ -253,3 +253,128 @@ def test_driver_step_with_log_shows_notice_as_warning_line(monkeypatch):
     warn_keys = [c[1] for c in mlog.calls if c[0] == "finish" and c[2] == "warn"]
     assert len(warn_keys) == 1
     assert mlog.texts[warn_keys[0]] == "a tela pode piscar"
+
+
+# --- consent ---------------------------------------------------------------------
+
+@pytest.mark.parametrize("argv", [["--no-sound"], ["-y"], ["-p", "arcade"], ["limpar"]])
+def test_only_dry_run_may_omit_the_subcommand(argv):
+    with pytest.raises(SystemExit):
+        parse_args(argv)
+
+
+def test_drivers_flag_defaults_false():
+    assert parse_args(["menu"]).drivers is False
+    assert parse_args(["clean", "--drivers"]).drivers is True
+
+
+@pytest.mark.parametrize("argv,answer,expected", [
+    (["menu", "--no-drivers", "--drivers"], True, False),
+    (["menu", "--drivers", "-y"], False, True),
+    (["menu", "-y"], True, False),
+    (["menu"], True, True),
+    (["menu"], False, False),
+])
+def test_wants_drivers(monkeypatch, argv, answer, expected):
+    import main
+
+    monkeypatch.setattr(main, "show_driver_confirm", lambda: answer)
+
+    assert main._wants_drivers(parse_args(argv)) is expected
+
+
+def test_dry_run_lists_drivers_without_asking(monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "show_driver_confirm", lambda: pytest.fail("não deve perguntar"))
+
+    assert main._wants_drivers(parse_args(["clean", "-n"]), dry_run=True) is True
+
+
+def _clean_flow(monkeypatch, argv, confirm=True):
+    import main
+
+    calls = {"cleaned": 0, "restore": 0, "drivers": 0, "confirmed": 0}
+
+    class Log:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def start(self, *a):
+            pass
+
+        def finish(self, *a):
+            pass
+
+    def fake_clean(*a, **k):
+        calls["cleaned"] += 1
+        return "0 B", 0
+
+    def fake_confirm(paths):
+        calls["confirmed"] += 1
+        return confirm
+
+    def fake_restore():
+        calls["restore"] += 1
+        return False, "falhou"
+
+    monkeypatch.setattr(main, "show_welcome", lambda skip_wait=False: None)
+    monkeypatch.setattr(main, "is_admin", lambda: True)
+    monkeypatch.setattr(main, "get_temp_paths", lambda: {"User Temp": "x"})
+    monkeypatch.setattr(main, "show_clean_confirm", fake_confirm)
+    monkeypatch.setattr(main, "show_driver_confirm", lambda: False)
+    monkeypatch.setattr(main, "show_mission_log", lambda title: Log())
+    monkeypatch.setattr(main, "_clean_with_log", fake_clean)
+    monkeypatch.setattr(main, "create_restore_point", fake_restore)
+    monkeypatch.setattr(main, "_run_driver_step", lambda *a, **k: calls.update(drivers=1))
+    monkeypatch.setattr(main, "show_completion", lambda *a, **k: None)
+    main.cmd_clean(parse_args(argv))
+    return calls
+
+
+def test_clean_stops_when_user_declines(monkeypatch):
+    calls = _clean_flow(monkeypatch, ["clean"], confirm=False)
+
+    assert calls == {"cleaned": 0, "restore": 0, "drivers": 0, "confirmed": 1}
+
+
+def test_clean_with_yes_skips_prompt_and_drivers_but_takes_restore_point(monkeypatch):
+    calls = _clean_flow(monkeypatch, ["clean", "-y"])
+
+    assert calls == {"cleaned": 1, "restore": 1, "drivers": 0, "confirmed": 0}
+
+
+def test_dry_run_takes_no_restore_point(monkeypatch):
+    calls = _clean_flow(monkeypatch, ["clean", "-n", "-y"])
+
+    assert calls["restore"] == 0
+    assert calls["drivers"] == 1
+
+
+def test_menu_exit_choice_runs_nothing(monkeypatch):
+    import main
+    from frontend import cli
+
+    monkeypatch.setattr(main, "show_welcome", lambda skip_wait=False: None)
+    monkeypatch.setattr(main, "show_level_menu", lambda: cli.EXIT_CHOICE)
+    monkeypatch.setattr(main.profiles, "resolve_clean_paths", lambda level: pytest.fail("não deve executar"))
+
+    main.cmd_menu(parse_args(["menu", "-y"]))
+
+
+def test_esc_in_level_menu_returns_exit(monkeypatch):
+    from io import StringIO
+
+    from rich.console import Console
+
+    from frontend.components import level_menu
+
+    monkeypatch.setattr(level_menu, "_is_interactive_terminal", lambda: True)
+    monkeypatch.setattr(level_menu, "_read_menu_key", lambda: "esc")
+    monkeypatch.setattr(level_menu, "clear_screen", lambda console: None)
+    monkeypatch.setattr(level_menu, "_render_menu_panel", lambda idx: "menu")
+
+    assert level_menu.display_level_menu(Console(file=StringIO())) == level_menu.EXIT_CHOICE
