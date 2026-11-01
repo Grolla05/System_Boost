@@ -4,6 +4,7 @@ from .logger import get_logger
 from .privileges import is_admin
 from .tweaks import manager as tweaks_manager
 from .tweaks import catalog as tweaks_catalog
+from .tweaks import state_store
 from .tweaks.base import TweakAlreadyApplied, TweakError
 
 log = get_logger("profiles")
@@ -95,6 +96,21 @@ def _item_label(item):
         if item.get("task"):
             return str(item["task"]).rsplit("\\", 1)[-1]
     return str(item)
+
+
+def preview_tweak_items(tweak_ids, state_path=None):
+    """Returns {tweak_id: [item names apply() would change]} for aggregate tweaks not yet applied."""
+    preview = {}
+    for tweak_id in tweak_ids:
+        tweak = tweaks_catalog.get_tweak(tweak_id)
+        if not tweak.previews_items:
+            continue
+        try:
+            if state_store.get_applied(tweak_id, path=state_path) is None:
+                preview[tweak_id] = [_item_label(item) for item in tweak.get_current_value()]
+        except TweakError as exc:
+            log.warning("prévia de '%s' indisponível: %s", tweak_id, exc)
+    return preview
 
 
 def apply_level_tweaks(level_id, state_path=None, on_event=None):

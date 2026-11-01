@@ -1,5 +1,10 @@
 # Changes
 
+## Filtro de terceiros ampliado com prévia
+
+- `third_party.py`: lista única para startup, serviços e tarefas. Volta a proteger VPN e soma bancos, EDR/antivírus, backup, licenciamento e updaters. `ANYWHERE_NAMES` casa `vpn`, `update` e `trendmicro` dentro da palavra. Reverte a decisão anterior de remover VPN e de manter serviços/tarefas com a lista menor.
+- `profiles.preview_tweak_items()`: briefing lista cada item antes de agir (até 30).
+
 ## Lixeira esvaziada já no Stage 1
 
 - `backend/profiles.py`: `recycle-bin` passa de Mediana para Leve (Stage 2+ herdam). Ordem em Mediana: Lixeira, npm, uv.

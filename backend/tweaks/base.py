@@ -17,6 +17,7 @@ class Tweak(ABC):
     label = None
     description = None
     requires_admin = False
+    previews_items = False  # True: get_current_value() lists the items apply() would change
 
     @abstractmethod
     def get_current_value(self):

@@ -98,6 +98,7 @@ class ThirdPartyServicesTweak(Tweak):
     label = "Serviços de terceiros: iniciar só sob demanda"
     description = "Move serviços de terceiros de início automático para manual (serviços do Windows são preservados)."
     requires_admin = True
+    previews_items = True
 
     def _candidates(self):
         return [

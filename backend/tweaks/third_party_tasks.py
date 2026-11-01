@@ -56,6 +56,7 @@ class ThirdPartyTasksTweak(Tweak):
     label = "Tarefas agendadas de terceiros: desativar"
     description = "Desativa tarefas agendadas de terceiros que rodam sozinhas em segundo plano (tarefas do Windows são preservadas)."
     requires_admin = True
+    previews_items = True
 
     def _candidates(self):
         return [

@@ -151,12 +151,13 @@ class StartupAppsTweak(Tweak):
     label = "Apps de terceiros na inicialização: desativar"
     description = "Impede que programas de terceiros abram junto com o Windows (itens do sistema são preservados)."
     requires_admin = False
+    previews_items = True
 
     def _candidates(self):
         """Enabled third-party entries."""
         return [
             e for e in discover_entries()
-            if e["enabled"] and third_party.is_third_party(e["name"], e["command"], startup=True)
+            if e["enabled"] and third_party.is_third_party(e["name"], e["command"])
         ]
 
     def get_current_value(self):
