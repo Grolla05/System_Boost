@@ -1,5 +1,9 @@
 # Changes
 
+## Instalação NVIDIA confirmada pela versão
+
+- `nvidia_driver.py`: após o instalador, a versão relida do Windows decide o resultado. Driver novo presente é sucesso com qualquer código de saída; código 0 com driver antigo pede reinício.
+
 ## Ajustes por máquina
 
 - `profiles.py`: níveis deixam fora `sysmain` e Prefetch em HDD, `hibernation` e `power_plan` em notebook; briefing lista o que ficou fora.

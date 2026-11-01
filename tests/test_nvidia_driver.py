@@ -218,7 +218,16 @@ def _update():
     return nvidia_driver.NvidiaUpdate("NVIDIA GeForce RTX 4070", "551.23", "617.42", GOOD_URL)
 
 
-def test_install_downloads_verifies_signature_then_runs_silent(monkeypatch, tmp_path):
+@pytest.fixture
+def installed_after(monkeypatch):
+    """Sets the driver version read back after the installer runs (None: can't be read)."""
+    def set_version(version=None):
+        monkeypatch.setattr(nvidia_driver, "_installed_version", lambda gpu_name: version)
+    set_version()
+    return set_version
+
+
+def test_install_downloads_verifies_signature_then_runs_silent(monkeypatch, tmp_path, installed_after):
     steps = []
     monkeypatch.setattr(nvidia_driver, "_download", lambda url, dest: (steps.append("download"), dest.write_bytes(b"x")))
     monkeypatch.setattr(nvidia_driver, "_verify_signature", lambda path: steps.append("verify"))
@@ -255,7 +264,7 @@ def test_install_does_not_run_when_signature_invalid(monkeypatch, tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-def test_install_nonzero_exit_reports_failure_and_cleans_up(monkeypatch, tmp_path):
+def test_install_nonzero_exit_reports_failure_and_cleans_up(monkeypatch, tmp_path, installed_after):
     monkeypatch.setattr(nvidia_driver, "_download", lambda url, dest: dest.write_bytes(b"x"))
     monkeypatch.setattr(nvidia_driver, "_verify_signature", lambda path: None)
     monkeypatch.setattr(nvidia_driver.subprocess, "run", lambda *a, **k: _Done(1))
@@ -286,3 +295,45 @@ def test_flicker_warning_tells_user_the_screen_may_flash():
 def test_find_product_uses_notebook_series_when_chassis_is_portable(monkeypatch):
     monkeypatch.setattr(nvidia_driver, "_fetch", fake_fetch())
     assert nvidia_driver.find_product("NVIDIA GeForce RTX 4050", notebook=True) == ("129", "1008")
+
+
+def _outcome(returncode, installed_after, version):
+    installed_after(version)
+    return nvidia_driver._install_outcome(_update(), returncode)
+
+
+def test_nonzero_exit_with_new_driver_in_place_is_success(installed_after):
+    assert _outcome(1, installed_after, _update().latest) == (True, False, "instalado")
+
+
+def test_nonzero_exit_with_old_driver_is_failure(installed_after):
+    ok, reboot, note = _outcome(1, installed_after, "551.23")
+
+    assert ok is False and reboot is False
+    assert "1" in note
+
+
+def test_zero_exit_with_old_driver_asks_for_reboot(installed_after):
+    assert _outcome(0, installed_after, "551.23") == (True, True, "reinicie para concluir")
+
+
+def test_zero_exit_when_version_cannot_be_read_is_success(installed_after):
+    assert _outcome(0, installed_after, None) == (True, False, "instalado")
+
+
+def test_installed_version_reads_the_updated_gpu(monkeypatch):
+    monkeypatch.setattr(nvidia_driver, "get_nvidia_gpus", lambda: [
+        {"name": "NVIDIA GeForce GT 710", "driver_version": "30.0.14.7212"},
+        {"name": "NVIDIA GeForce RTX 4070", "driver_version": "32.0.16.1742"},
+    ])
+
+    assert nvidia_driver._installed_version("NVIDIA GeForce RTX 4070") == "617.42"
+
+
+def test_installed_version_survives_a_failed_read(monkeypatch):
+    def boom():
+        raise PowerShellError("falhou")
+
+    monkeypatch.setattr(nvidia_driver, "get_nvidia_gpus", boom)
+
+    assert nvidia_driver._installed_version("NVIDIA GeForce RTX 4070") is None

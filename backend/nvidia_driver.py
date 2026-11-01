@@ -231,6 +231,33 @@ def _verify_signature(path):
         raise NvidiaDriverError("assinatura inválida no instalador da NVIDIA")
 
 
+def _installed_version(gpu_name):
+    """Returns the NVIDIA version now installed for gpu_name, or None if it can't be read."""
+    try:
+        gpus = get_nvidia_gpus()
+    except (PowerShellError, ValueError) as exc:
+        log.warning("nvidia: não foi possível reler a versão instalada: %s", exc)
+        return None
+    for gpu in gpus:
+        if gpu["name"] == gpu_name:
+            return windows_to_nvidia_version(gpu["driver_version"])
+    return None
+
+
+def _install_outcome(update, returncode):
+    """Decides (ok, reboot_required, note) from the driver Windows reports, not only the exit code.
+
+    NVIDIA doesn't document the installer's exit codes, so a newer driver in place counts as
+    success whatever the code was. Code 0 with the old version still loaded needs a reboot.
+    """
+    installed = _installed_version(update.gpu)
+    if installed is not None and not is_newer(update.latest, installed):
+        return True, False, "instalado"
+    if returncode == 0:
+        return (True, False, "instalado") if installed is None else (True, True, "reinicie para concluir")
+    return False, False, f"falha na instalação (código {returncode})"
+
+
 def install_update(update, workdir=None):
     """Downloads, verifies and silently installs the driver. Returns (ok, reboot_required, note)."""
     validate_download_url(update.url)
@@ -255,9 +282,7 @@ def install_update(update, workdir=None):
         except OSError as exc:
             raise NvidiaDriverError(f"não foi possível executar o instalador: {exc}")
         log.info("nvidia: instalador retornou %s", result.returncode)
-        if result.returncode == 0:
-            return True, False, "instalado"
-        return False, False, f"falha na instalação (código {result.returncode})"
+        return _install_outcome(update, result.returncode)
     finally:
         try:
             installer.unlink()
