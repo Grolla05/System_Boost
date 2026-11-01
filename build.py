@@ -146,7 +146,7 @@ def build():
         return False
 
     # Ensure dependencies are installed
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements-build.txt"])
 
     try:
         # Outside ./build: `pyinstaller --clean` wipes that folder before it reads the file.
@@ -169,6 +169,7 @@ def build():
             )
     except (subprocess.CalledProcessError, OSError) as e:
         print(f"\nSigning failed: {e}")
+        return False
     return True
 
 

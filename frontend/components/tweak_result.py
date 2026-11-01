@@ -5,7 +5,7 @@ from rich.panel import Panel
 
 def display_tweak_success(console: Console, message):
     """Prints a success panel for a completed apply/undo action."""
-    console.print(Panel(f"[success]★ {message}[/success]", box=box.DOUBLE, border_style="bold #8bac0f", expand=False))
+    console.print(Panel(f"[success]★ {message}[/success]", box=box.DOUBLE, border_style="border", expand=False))
 
 
 def display_tweak_error(console: Console, message):

@@ -105,6 +105,18 @@ def test_signing_runs_signtool_when_thumbprint_set(monkeypatch):
     assert "ABC123" in calls[0]
 
 
+def test_build_fails_when_signing_fails(monkeypatch):
+    def fake_check_call(cmd, **kwargs):
+        if cmd[0] == "signtool":
+            raise build.subprocess.CalledProcessError(1, cmd)
+
+    monkeypatch.setenv(build.SIGN_ENV_VAR, "ABC123")
+    monkeypatch.setattr(build, "is_exe_running", lambda: False)
+    monkeypatch.setattr(build.subprocess, "check_call", fake_check_call)
+
+    assert build.build() is False
+
+
 def _fake_tasklist(monkeypatch, stdout="", returncode=0, raises=None):
     calls = []
 

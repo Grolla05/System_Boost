@@ -6,15 +6,15 @@ from ..audio import play_start
 from ._terminal import _read_single_key, clear_screen
 
 BANNER = """
-[bold #9bbc0f] ███████╗██╗   ██╗███████╗████████╗███████╗███╗   ███╗   ██████╗  ██████╗  ██████╗ ███████╗████████╗[/bold #9bbc0f]
-[bold #8bac0f] ██╔════╝╚██╗ ██╔╝██╔════╝╚══██╔══╝██╔════╝████╗ ████╝   ██╔══██╗██╔═══██╗██╔═══██╗██╔════╝╚══██╔══╝[/bold #8bac0f]
-[bold #8bac0f] ███████╗ ╚████╔╝ ███████╗   ██║   █████╗  ██╔████╔██║   ██████╔╝██║   ██║██║   ██║███████╗   ██║   [/bold #8bac0f]
-[bold #306230] ╚════██║  ╚██╔╝  ╚════██║   ██║   ██╔══╝  ██║╚██╔╝██║   ██╔══██╗██║   ██║██║   ██║╚════██║   ██║   [/bold #306230]
-[bold #306230] ███████║   ██║   ███████║   ██║   ███████╗██║ ╚═╝ ██║   ██████╔╝╚██████╔╝╚██████╔╝███████║   ██║   [/bold #306230]
-[dim #306230] ╚══════╝   ╚═╝   ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═╝   ╚═════╝  ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝   [/dim #306230]
+[highlight] ███████╗██╗   ██╗███████╗████████╗███████╗███╗   ███╗   ██████╗  ██████╗  ██████╗ ███████╗████████╗[/highlight]
+[accent] ██╔════╝╚██╗ ██╔╝██╔════╝╚══██╔══╝██╔════╝████╗ ████╝   ██╔══██╗██╔═══██╗██╔═══██╗██╔════╝╚══██╔══╝[/accent]
+[accent] ███████╗ ╚████╔╝ ███████╗   ██║   █████╗  ██╔████╔██║   ██████╔╝██║   ██║██║   ██║███████╗   ██║   [/accent]
+[dim] ╚════██║  ╚██╔╝  ╚════██║   ██║   ██╔══╝  ██║╚██╔╝██║   ██╔══██╗██║   ██║██║   ██║╚════██║   ██║   [/dim]
+[dim] ███████║   ██║   ███████║   ██║   ███████╗██║ ╚═╝ ██║   ██████╔╝╚██████╔╝╚██████╔╝███████║   ██║   [/dim]
+[dim] ╚══════╝   ╚═╝   ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═╝   ╚═════╝  ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝   [/dim]
 """
 
-SUBTITLE = "[bold #8bac0f]►►► SYSTEM BOOST // GAME BOY EDITION ◄◄◄[/bold #8bac0f]\n[dim #cadc9f][ DISK CLEANUP & KERNEL TWEAKS ][/dim #cadc9f]"
+SUBTITLE = "[accent]►►► SYSTEM BOOST // GAME BOY EDITION ◄◄◄[/accent]\n[dim][ DISK CLEANUP & KERNEL TWEAKS ][/dim]"
 
 
 def display_welcome_screen(console: Console, skip_wait: bool = False):
@@ -26,11 +26,11 @@ def display_welcome_screen(console: Console, skip_wait: bool = False):
     console.print(SUBTITLE, justify="center")
     console.print()
 
-    box_content = "[bold #9bbc0f]► [ PRESS ANY KEY TO START ] ◄[/bold #9bbc0f]"
+    box_content = "[highlight]► [ PRESS ANY KEY TO START ] ◄[/highlight]"
     prompt_panel = Panel(
         box_content,
         box=box.DOUBLE,
-        border_style="bold #8bac0f",
+        border_style="border",
         expand=False,
         padding=(0, 3),
     )

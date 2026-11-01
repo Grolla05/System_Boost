@@ -1,7 +1,5 @@
-import pytest
 
 from backend.tweaks.registry_value import RegistryValueTweak
-from backend.tweaks.base import TweakError
 
 
 def _make_tweak(fake_winreg, requires_admin=False):

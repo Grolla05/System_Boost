@@ -1,6 +1,5 @@
 """8-bit retro chiptune audio generator using native Windows winsound."""
 import os
-import sys
 import threading
 
 _SOUND_ENABLED = True
@@ -58,10 +57,5 @@ def play_victory():
 def play_error():
     """Low buzz tone for errors or cancellations."""
     _play_tones_async([(220, 60), (180, 90)])
-
-
-def play_typewriter_click():
-    """Subtle high tick for typewriter dialogue."""
-    _play_tones_async([(1400, 10)])
 
 

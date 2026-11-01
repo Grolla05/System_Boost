@@ -53,10 +53,10 @@ def display_machine_info(console: Console, info, wait=False):
     if wait:
         clear_screen(console)
     table = Table(
-        title="[bold #9bbc0f]╔═ A FICHA DA MÁQUINA // CARTRIDGE INFO ═╗[/bold #9bbc0f]",
+        title="[highlight]╔═ A FICHA DA MÁQUINA // CARTRIDGE INFO ═╗[/highlight]",
         show_header=False,
         box=box.DOUBLE,
-        border_style="bold #8bac0f",
+        border_style="border",
         padding=(0, 2),
     )
     table.add_column("Item", style="accent")
@@ -76,6 +76,6 @@ def display_machine_info(console: Console, info, wait=False):
     console.print("\n" * max(1, (console.height - _SHEET_HEIGHT) // 2), end="")
     console.print(Align.center(table))
     console.print(
-        Align.center("\n[bold #8bac0f]Pressione qualquer tecla para voltar ao menu...[/bold #8bac0f]")
+        Align.center("\n[accent]Pressione qualquer tecla para voltar ao menu...[/accent]")
     )
     _read_single_key()

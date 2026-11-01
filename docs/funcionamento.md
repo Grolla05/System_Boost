@@ -1,6 +1,6 @@
-# Documentação de Funcionamento do WinCleaner
+# Documentação de Funcionamento do System Boost
 
-Esta documentação descreve detalhadamente a arquitetura, o fluxo de execução e a lógica interna do **WinCleaner**, um utilitário de alto desempenho para limpeza de arquivos temporários do Windows.
+Esta documentação descreve detalhadamente a arquitetura, o fluxo de execução e a lógica interna do **System Boost**, utilitário que limpa arquivos temporários do Windows e aplica ajustes reversíveis. O nome antigo, WinCleaner, ainda aparece na pasta de dados `%LOCALAPPDATA%\WinCleaner`, mantida para preservar o estado de instalações existentes.
 
 ---
 
@@ -18,12 +18,12 @@ graph TD
     N --> O[backend/_powershell.py: CIM via PowerShell]
     C --> P[components/machine_info.py: Tabela da ficha]
     C --> D[components/welcome.py: Tela Inicial]
-    C --> E[components/loading.py: Progresso da Limpeza]
+    C --> E[components/live_log.py: Mission log]
     C --> F[components/completion.py: Tela de Sucesso e Fechamento]
     C --> I[components/tweak_list.py e tweak_result.py]
     C --> M[components/level_menu.py e level_completion.py]
-    E --> G[backend/cleaner.py: Lógica de Exclusão]
-    H --> J[backend/tweaks/catalog.py: 7 ajustes]
+    A --> G[backend/cleaner.py: Lógica de Exclusão]
+    H --> J[backend/tweaks/catalog.py: 12 ajustes]
     H --> K[backend/tweaks/state_store.py: JSON em LOCALAPPDATA]
     L --> G
     L --> H
@@ -39,7 +39,7 @@ graph TD
 Responsável por orquestrar o ciclo de vida completo do aplicativo:
 *   Inicializa e exibe a tela de boas-vindas.
 *   Determina os privilégios do usuário. Se **não for administrador**, restringe a limpeza apenas à pasta temporária do usuário (`User Temp`). Se **for administrador**, habilita a limpeza do sistema e do `Prefetch`.
-*   Chama a barra de progresso unificada e dispara a exclusão física dos arquivos.
+*   Abre o mission log, cria o ponto de restauração e dispara a exclusão física dos arquivos.
 *   Exibe a tela de encerramento com o total de bytes liberados.
 
 ### 2. Backend (`/backend`)
@@ -72,25 +72,24 @@ Coleta a "ficha da máquina" (comando `info`). Backend puro, sem UI, **nunca lev
 *   **Notebook × Desktop**: chassi 8/9/10/11/14/30/31/32 → Notebook; qualquer outro chassi informativo → Desktop; chassi "Outro/Desconhecido" (1/2) usa a presença de bateria como desempate.
 
 #### 📄 `backend/_powershell.py`
-`run_powershell(script, timeout)` + `PowerShellError`: executa `powershell.exe` sem perfil, sem stdin, com timeout, e devolve stdout decodificado (`utf-8-sig`). Mesmo padrão do `_run_powershell` de `drivers.py` (que por ora continua com sua cópia própria).
+`run_powershell(script, timeout)` + `PowerShellError`: executa `powershell.exe` sem perfil, sem stdin, com timeout, e devolve stdout decodificado (`utf-8-sig`). `drivers.py` usa esta função e converte `PowerShellError` em `DriverError`.
 
 ---
 
 ### 3. Frontend (`/frontend`)
 
-Implementado com foco em uma experiência estética inspirada nos guias da **Apple (Premium & Minimalist)** utilizando a biblioteca `rich`.
+Interface retrô 8-bit feita com a biblioteca `rich`. As cores vêm do tema da paleta ativa (`frontend/palettes.py`), nunca fixas nos componentes.
 
 #### 📄 `frontend/cli.py`
-Define a paleta de cores padrão monocromática com destaque azul (`accent`):
-*   Tons brancos, pretos profundos e azul suave garantem alta legibilidade e um visual limpo e refinado.
+Ponto único entre `main.py` e os componentes: cria o `Console` com o tema da paleta e expõe as funções `show_*`.
 
 #### 📄 `frontend/components/welcome.py`
-*   Gera um painel com bordas arredondadas exibindo o título do programa de forma centralizada e limpa.
+*   Mostra o logo e o painel "PRESS ANY KEY", centralizados.
 *   Aguardar qualquer tecla usando a captura direta de teclado do Windows (`msvcrt.getch()`).
 
-#### 📄 `frontend/components/loading.py`
-*   Varre previamente as pastas para calcular o número total aproximado de arquivos a serem deletados.
-*   Inicia uma barra de carregamento fluida com animação de spinner (`dots`) e preenchimento gradual, atualizada dinamicamente a cada arquivo deletado no backend.
+#### 📄 `frontend/components/live_log.py`
+*   `MissionLog`: uma linha por etapa, com estado em andamento, OK, FAIL, SKIP ou aviso.
+*   O log completo continua na tela, acima do resumo final.
 
 #### 📄 `frontend/components/machine_info.py`
 *   `display_machine_info(console, info)`: tabela "A ficha da máquina" com Windows, Processador, Memória, Placa de vídeo (uma linha por GPU), Disco do sistema e Tipo. Campos vazios aparecem como `desconhecido`.
@@ -101,7 +100,7 @@ Define a paleta de cores padrão monocromática com destaque azul (`accent`):
 *   `display_undo_results(console, results, wait)`: OK/FALHA por ajuste e o total desfeito.
 
 #### 📄 `frontend/components/completion.py`
-*   Exibe uma caixa de sucesso verde arredondada contendo o total limpo.
+*   Exibe o painel de sucesso com o total limpo.
 *   Aguarda o input do usuário para sair.
 *   **Fechamento Inteligente do Terminal (Windows)**:
     *   Após a leitura da tecla, o código detecta o handle do console atual usando `ctypes.windll.kernel32.GetConsoleWindow()`.
@@ -123,7 +122,7 @@ sequenceDiagram
     participant CLI as frontend/cli.py
     participant Completion as components/completion.py
 
-    Usuario->>Main: Executa WinCleaner.exe
+    Usuario->>Main: Executa python main.py clean
     Main->>CLI: show_welcome()
     CLI->>Usuario: Exibe painel inicial e aguarda tecla
     Usuario->>CLI: Pressiona tecla
@@ -131,13 +130,13 @@ sequenceDiagram
     Privs-->>Main: Retorna True/False (Admin Status)
     Main->>Cleaner: get_temp_paths()
     Cleaner-->>Main: Retorna caminhos disponíveis
-    Main->>CLI: show_loading(paths_to_clean)
+    Main->>CLI: show_clean_confirm(paths_to_clean)
+    Main->>CLI: show_mission_log(title)
     rect rgb(30, 30, 40)
-        Note over CLI, Cleaner: Loop de Limpeza e Progresso
-        CLI->>Cleaner: clean_directory(path)
-        Cleaner-->>CLI: Envia atualizações via progress_callback
+        Note over Main, Cleaner: Uma linha do log por pasta
+        Main->>Cleaner: clean_directory(path)
+        Cleaner-->>Main: Retorna bytes liberados
     end
-    Cleaner-->>Main: Retorna total de bytes limpos
     Main->>CLI: show_completion(total_formatted)
     CLI->>Completion: display_completion_screen()
     Completion->>Usuario: Exibe total limpo e pede tecla
@@ -153,11 +152,11 @@ sequenceDiagram
 
 ## 🔄 Ajustes Reversíveis (`backend/tweaks/`)
 
-Subsistema que aplica e desfaz ajustes do Windows (plano de energia, hibernação, efeitos visuais, telemetria, indexação, SysMain, tarefa de compatibilidade), sempre salvando o valor anterior antes de sobrescrever.
+Subsistema que aplica e desfaz ajustes do Windows, sempre salvando o valor anterior antes de sobrescrever.
 
 ### Abstração `Tweak`
 
-Diferente do resto do backend (só funções), aqui é usada uma classe abstrata (`abc.ABC`) porque os 7 ajustes têm mecanismos bem diferentes entre si e precisam de polimorfismo real — uma subclasse que esquecer `undo()` falha na hora de definir a classe, não silenciosamente na hora que o usuário mais precisa que o undo funcione.
+Diferente do resto do backend (só funções), aqui é usada uma classe abstrata (`abc.ABC`) porque os 12 ajustes têm mecanismos bem diferentes entre si e precisam de polimorfismo real — uma subclasse que esquecer `undo()` falha na hora de definir a classe, não silenciosamente na hora que o usuário mais precisa que o undo funcione.
 
 ```mermaid
 classDiagram
@@ -175,11 +174,16 @@ classDiagram
     Tweak <|-- ScheduledTaskTweak
     Tweak <|-- PowerPlanTweak
     Tweak <|-- HibernationTweak
+    Tweak <|-- StartupAppsTweak
+    Tweak <|-- ThirdPartyServicesTweak
+    Tweak <|-- ThirdPartyTasksTweak
+    Tweak <|-- RecommendationsOffersTweak
+    Tweak <|-- MouseAccelerationTweak
 ```
 
 As classes são organizadas por **mecanismo** (como falam com o Windows), não uma por ajuste — `RegistryValueTweak` atende tanto `visual_effects` quanto `telemetry`; `ServiceStateTweak` atende tanto `indexing` (WSearch) quanto `sysmain` (SysMain).
 
-### Os 7 ajustes (`backend/tweaks/catalog.py`)
+### Os 12 ajustes (`backend/tweaks/catalog.py`)
 
 | id | admin? | leitura (locale-safe) | escrita | valor salvo para undo |
 |---|---|---|---|---|
@@ -189,7 +193,14 @@ As classes são organizadas por **mecanismo** (como falam com o Windows), não u
 | `telemetry` | sim | `winreg` `AllowTelemetry` | mesma chave | int ou `null` (undo apaga o valor se estava ausente) |
 | `indexing` | sim | `winreg` `Services\WSearch\Start` | `sc config` + `sc stop` | tipo de start (string) |
 | `sysmain` | sim | `winreg` `Services\SysMain\Start` | `sc config` + `sc stop` | tipo de start (string) |
-| `compat_appraiser` | sim | `schtasks /Query /XML` | `schtasks /Change` | `"Enabled"`/`"Disabled"` |
+| `compat_appraiser` | sim | `schtasks /Query /XML` (nome com ou sem `Exp`) | `schtasks /Change` | `"Enabled"`/`"Disabled"` |
+| `startup_apps` | não | itens de inicialização | desativa programas de terceiros | lista de itens alterados |
+| `third_party_services` | sim | serviços automáticos | muda para manual e para o serviço | lista de itens alterados |
+| `third_party_tasks` | sim | tarefas fora de `\Microsoft\` | desativa a tarefa | lista de itens alterados |
+| `recommendations_offers` | não | `winreg` | desliga as opções de recomendações e ofertas | valores anteriores |
+| `mouse_acceleration` | não | `winreg` | desliga a precisão do ponteiro | valores anteriores |
+
+`startup_apps`, `third_party_services` e `third_party_tasks` usam o filtro de `third_party.py`, que preserva itens do Windows, antivírus, drivers, VPN, bancos de dados, backup, licenciamento e atualizadores. Serviços em início atrasado são lidos como `delayed-auto` e voltam a esse modo no undo.
 
 **Leituras usam `winreg`, não parsing de saída de `.exe`** — a saída de `sc.exe`/`schtasks.exe`/`powercfg.exe` é localizada no idioma do Windows (esta interface é pt-BR, então o risco é real). Escritas continuam usando os `.exe`s porque as flags de linha de comando são fixas, não traduzidas. Um detalhe descoberto durante o desenvolvimento: `schtasks /XML` declara `encoding="UTF-16"` no prólogo do XML, mas os bytes capturados via pipe redirecionado são, na prática, UTF-8 — `scheduled_tasks.py` decodifica como texto (UTF-8) antes de entregar ao `ElementTree`, em vez de deixar o `ET.fromstring` confiar numa declaração que não bate com os bytes reais.
 
@@ -216,7 +227,7 @@ Arquivo JSON em `%LOCALAPPDATA%\WinCleaner\tweaks_state.json`, escrita atômica 
 
 Um registro nasce com `status: "pending"` antes de `apply()` e vira `applied` depois, então uma queda no meio ainda permite desfazer. Arquivo danificado nunca é sobrescrito (`StateCorruptError`, cópia `.corrupt-*`), e cada gravação mantém `.bak`. Se um undo agregado falha em parte, `TweakPartialUndo` mantém no estado só os itens restantes.
 
-`previous_value: null` é um valor significativo (a chave/valor não existia antes) — `undo()` **apaga** o valor do registro em vez de escrever `null`. Reaplicar um ajuste já aplicado (sem desfazer antes) é **rejeitado**, nunca sobrescrito — sobrescrever destruiria o valor original verdadeiro. `_seq` é um contador interno usado para ordenar `boost undo --all` do mais recente para o mais antigo, independente de resolução do relógio do sistema.
+`previous_value: null` é um valor significativo (a chave/valor não existia antes) — `undo()` **apaga** o valor do registro em vez de escrever `null`. Reaplicar um ajuste já aplicado (sem desfazer antes) é **rejeitado**, nunca sobrescrito — sobrescrever destruiria o valor original verdadeiro. `_seq` é um contador interno usado para ordenar `undo --all` do mais recente para o mais antigo, independente de resolução do relógio do sistema.
 
 ### Fluxo de `apply` / `undo` (`backend/tweaks/manager.py`)
 
@@ -229,7 +240,7 @@ sequenceDiagram
     participant Tweak as Tweak (concreto)
     participant State as state_store.py
 
-    Usuario->>Main: boost apply telemetry
+    Usuario->>Main: python main.py apply telemetry
     Main->>Manager: apply_tweak("telemetry")
     Manager->>Manager: catalog.get_tweak("telemetry")
     Manager->>Privs: is_admin() [se requires_admin]
@@ -241,13 +252,14 @@ sequenceDiagram
     else pode prosseguir
         Manager->>Tweak: get_current_value()
         Tweak-->>Manager: previous_value
+        Manager->>State: registro pending com previous_value
         Manager->>Tweak: apply()
         Tweak-->>Manager: applied_value
-        Manager->>State: save_applied(id, previous_value, applied_value, ...)
+        Manager->>State: marca como applied
         Manager-->>Main: applied_value
     end
 
-    Usuario->>Main: boost undo telemetry
+    Usuario->>Main: python main.py undo telemetry
     Main->>Manager: undo_tweak("telemetry")
     Manager->>State: get_applied("telemetry")
     State-->>Manager: record (ou None)
@@ -262,7 +274,7 @@ sequenceDiagram
 
 **Admin: falha clara, nunca auto-elevação via UAC.** Se um ajuste exige admin e o terminal não está elevado, `manager.py` levanta `TweakError` com mensagem pedindo para reabrir como Administrador — não tenta relançar o processo elevado. Isso mantém `--yes`/uso automatizado viável e evita um prompt de elevação surpresa, coerente com o princípio de "sem login/conta/telemetria própria" do projeto.
 
-`boost list`/`boost apply <id>`/`boost undo <id>|--all` são os subcomandos novos em `main.py` (via `argparse.add_subparsers()`); `python main.py --dry-run -y` sem palavra-chave de subcomando continua funcionando como antes (implica `clean`).
+`list`, `apply <id>` e `undo <id>|--all` são subcomandos de `main.py` (via `argparse.add_subparsers()`). Sem subcomando, só `--dry-run` é aceito e implica `clean`.
 
 ---
 
@@ -295,7 +307,7 @@ sequenceDiagram
         Main-->>Usuario: sai sem alterar nada
     else usuário confirma
         Usuario-->>CLI: sim
-        Main->>CLI: show_loading(clean_paths, ...) [reaproveitado de cmd_clean]
+        Main->>CLI: show_mission_log(...) [ponto de restauração e limpeza]
         Main->>Profiles: apply_level_tweaks(level_id)
         Profiles-->>Main: resultados por ajuste (aplicado/pulado/falhou)
         Main->>CLI: show_level_completion(...)
@@ -326,6 +338,6 @@ A tela de conclusão do `menu` reaproveita o mesmo mecanismo de "aguardar tecla 
 ## 📦 Compilação Automatizada
 
 O arquivo `build.py` automatiza todo o empacotamento do utilitário utilizando o **PyInstaller**:
-*   Instala automaticamente dependências presentes no `requirements.txt`.
-*   Configura parâmetros de console (`--console`), arquivo único (`--onefile`), e nome personalizado (`--name=WinCleaner`).
-*   O resultado final é depositado diretamente em `/dist/WinCleaner.exe`.
+*   Instala as dependências de `requirements-build.txt`. `requirements.txt` tem só o runtime; `requirements-dev.txt` traz testes e lint.
+*   Gera arquivo único com manifesto `requireAdministrator` e nome `System Boost`.
+*   O resultado final fica em `dist/System Boost.exe`. Se a assinatura estiver configurada e falhar, o build termina com erro.

@@ -23,7 +23,6 @@ from frontend.cli import (
     show_undo_empty,
     show_undo_results,
     show_machine_info,
-    show_driver_update,
     format_driver_summary,
     console,
     show_welcome,
@@ -165,23 +164,17 @@ def _restore_point_step(mlog):
     mlog.finish("restore", "ok" if ok else "warn", note)
 
 
-def _run_driver_step(args, dry_run=False, mlog=None):
-    """Final step of menu/clean: scan devices and update drivers via Windows Update.
-
-    With mlog, progress is written to the mission log instead of a progress bar.
-    """
+def _run_driver_step(args, mlog, dry_run=False):
+    """Final step of menu/clean: scan devices and update drivers, one mission-log line per driver."""
     if args.no_drivers:
         log.info("etapa drivers: ignorada (--no-drivers)")
         return None
     log.info("etapa drivers: iniciando")
     try:
-        if mlog is None:
-            results, reboot_required = show_driver_update(update_all_drivers, dry_run=dry_run)
-        else:
-            results, reboot_required = _update_drivers_logged(mlog, dry_run)
+        results, reboot_required = _update_drivers_logged(mlog, dry_run)
     except Exception as exc:
         log.exception("etapa drivers: erro inesperado")
-        if mlog is not None and mlog.is_running("drivers"):
+        if mlog.is_running("drivers"):
             mlog.finish("drivers", "fail", str(exc))
         return f"[danger]Drivers: erro inesperado: {exc}[/danger]"
     return format_driver_summary(results, reboot_required)
@@ -283,7 +276,7 @@ def cmd_menu(args):
             log.info("etapa ajustes: iniciando")
             tweak_results = profiles.apply_level_tweaks(level_id, on_event=_tweak_event_handler(mlog))
             log.info("etapa ajustes: resultados=%s", tweak_results)
-            driver_summary = _run_driver_step(args, mlog=mlog) if drivers else None
+            driver_summary = _run_driver_step(args, mlog) if drivers else None
 
         outcome = show_level_completion(
             level_label, total_formatted, tweak_results,
@@ -294,7 +287,7 @@ def cmd_menu(args):
 
 
 def cmd_clean(args):
-    """Runs the existing temp-cleaning flow (welcome -> loading -> completion)."""
+    """Runs the temp-cleaning flow (welcome -> confirm -> mission log -> completion)."""
     show_welcome(skip_wait=args.yes)
 
     admin_status = is_admin()
@@ -318,7 +311,7 @@ def cmd_clean(args):
         if not args.dry_run:
             _restore_point_step(mlog)
         total_formatted, total_bytes = _clean_with_log(mlog, paths_to_clean, dry_run=args.dry_run)
-        driver_summary = _run_driver_step(args, dry_run=args.dry_run, mlog=mlog) if drivers else None
+        driver_summary = _run_driver_step(args, mlog, dry_run=args.dry_run) if drivers else None
 
     close_terminal = not (args.no_close or args.dry_run or args.yes)
     show_completion(

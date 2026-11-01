@@ -4,7 +4,7 @@ from unittest.mock import patch
 from rich.console import Console
 
 from frontend import cli
-from frontend.components import level_menu, welcome, completion, level_completion
+from frontend.components import level_menu, welcome, completion
 
 
 def test_gameboy_theme_defined():
