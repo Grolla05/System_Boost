@@ -1,5 +1,12 @@
 # Changes
 
+## Execução e instalação
+
+- `backend/_system.py`: `system_exe()`/`powershell_exe()` resolvem ferramentas do Windows por caminho absoluto, usados em tweaks, PowerShell e tela.
+- `drivers.py` reutiliza `run_powershell`.
+- `installer.iss`: `PrivilegesRequired=admin`, `{autopf}` e remoção da instalação antiga.
+- Logs do exe em `%LOCALAPPDATA%\\WinCleaner\\logs`.
+
 ## Lixeira esvaziada já no Stage 1
 
 - `backend/profiles.py`: `recycle-bin` passa de Mediana para Leve (Stage 2+ herdam). Ordem em Mediana: Lixeira, npm, uv.

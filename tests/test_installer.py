@@ -12,8 +12,8 @@ def test_installer_script_packages_executable_and_user_shortcuts():
     script = (ROOT / "installer.iss").read_text(encoding="utf-8")
 
     assert 'Source: "{#SourceDir}\\System Boost.exe"; DestDir: "{app}"' in script
-    assert "PrivilegesRequired=lowest" in script
-    assert "DefaultDirName={localappdata}\\Programs\\System Boost" in script
+    assert "PrivilegesRequired=admin" in script
+    assert "DefaultDirName={autopf}\\System Boost" in script
     assert "Uninstallable=yes" in script
     assert "[Icons]" in script
     assert 'Name: "{autoprograms}\\System Boost"' in script
@@ -113,3 +113,9 @@ def test_installer_script_launches_app_through_shortcut_after_install():
     # CreateProcess fails with error 740; going through the .lnk with shellexec triggers UAC.
     assert 'Filename: "{autodesktop}\System Boost.lnk"' in run
     assert "postinstall" in run and "shellexec" in run and "nowait" in run
+
+
+def test_installer_removes_the_old_per_user_copy():
+    script = (ROOT / "installer.iss").read_text(encoding="utf-8")
+
+    assert r"{localappdata}\Programs\System Boost\unins000.exe" in script.split("[Code]")[1]

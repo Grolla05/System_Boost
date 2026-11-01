@@ -24,7 +24,7 @@ def test_returns_decoded_stripped_stdout(monkeypatch):
 
     assert run_powershell("Get-Date", timeout=5) == '{"a": 1}'
     cmd, kwargs = calls[0]
-    assert cmd[0] == "powershell.exe"
+    assert cmd[0].lower().endswith(r"\powershell.exe")
     assert "-NoProfile" in cmd and "-NonInteractive" in cmd
     assert cmd[-1] == "Get-Date"
     assert kwargs["timeout"] == 5

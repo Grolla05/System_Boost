@@ -1,4 +1,6 @@
 """Shared fixtures for backend/tweaks tests: fake winreg and fake subprocess.run."""
+import ntpath
+
 import pytest
 
 
@@ -85,8 +87,9 @@ class FakeSubprocessRun:
         self.stdout = b""
 
     def __call__(self, cmd, **kwargs):
-        """Records cmd and returns the currently-scripted FakeCompletedProcess."""
-        self.calls.append(cmd)
+        """Records cmd (tool reduced to its bare name) and returns the scripted FakeCompletedProcess."""
+        assert ntpath.isabs(cmd[0]), f"caminho relativo: {cmd[0]}"
+        self.calls.append([ntpath.splitext(ntpath.basename(cmd[0]))[0], *cmd[1:]])
         return FakeCompletedProcess(returncode=self.returncode, stdout=self.stdout)
 
 

@@ -82,17 +82,9 @@ def test_default_log_dir_source_mode_is_project_root_logs(monkeypatch):
     assert sb_logger.default_log_dir() == expected
 
 
-def test_default_log_dir_frozen_in_dist_uses_parent_of_dist(monkeypatch, tmp_path):
-    exe = tmp_path / "proj" / "dist" / "System Boost.exe"
+def test_default_log_dir_frozen_uses_local_app_data(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
-    monkeypatch.setattr(sys, "executable", str(exe))
+    monkeypatch.setattr(sys, "executable", r"C:\Program Files\System Boost\System Boost.exe")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
 
-    assert sb_logger.default_log_dir() == tmp_path / "proj" / "logs"
-
-
-def test_default_log_dir_frozen_elsewhere_uses_exe_dir(monkeypatch, tmp_path):
-    exe = tmp_path / "apps" / "System Boost.exe"
-    monkeypatch.setattr(sys, "frozen", True, raising=False)
-    monkeypatch.setattr(sys, "executable", str(exe))
-
-    assert sb_logger.default_log_dir() == tmp_path / "apps" / "logs"
+    assert sb_logger.default_log_dir() == tmp_path / "WinCleaner" / "logs"

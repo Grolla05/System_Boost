@@ -10,6 +10,7 @@ try:
 except ImportError:  # pragma: no cover - non-Windows dev machine
     winreg = None
 
+from backend._system import system_exe
 from backend.logger import get_logger
 
 from . import third_party
@@ -73,7 +74,7 @@ def discover_services():
 
 def set_start_type(name, start_type):
     """Runs sc config to set the service's start type; raises OSError on failure."""
-    result = subprocess.run(["sc", "config", name, "start=", start_type], capture_output=True, check=False)
+    result = subprocess.run([system_exe("sc"), "config", name, "start=", start_type], capture_output=True, check=False)
     log.debug("sc config %s start=%s: returncode=%s", name, start_type, result.returncode)
     if result.returncode != 0:
         raise OSError(f"sc config {name} start={start_type} retornou {result.returncode}")
@@ -81,13 +82,13 @@ def set_start_type(name, start_type):
 
 def stop_service(name):
     """Stops the service (best effort: a service that won't stop is not an error)."""
-    result = subprocess.run(["sc", "stop", name], capture_output=True, check=False)
+    result = subprocess.run([system_exe("sc"), "stop", name], capture_output=True, check=False)
     log.debug("sc stop %s: returncode=%s", name, result.returncode)
 
 
 def start_service(name):
     """Starts the service (best effort)."""
-    result = subprocess.run(["sc", "start", name], capture_output=True, check=False)
+    result = subprocess.run([system_exe("sc"), "start", name], capture_output=True, check=False)
     log.debug("sc start %s: returncode=%s", name, result.returncode)
 
 

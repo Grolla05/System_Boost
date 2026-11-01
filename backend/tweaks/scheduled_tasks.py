@@ -2,6 +2,7 @@
 import subprocess
 import xml.etree.ElementTree as ET
 
+from backend._system import system_exe
 from backend.logger import get_logger
 
 from .base import Tweak, TweakError
@@ -25,7 +26,7 @@ class ScheduledTaskTweak(Tweak):
     def get_current_value(self):
         """Queries the task's XML definition and returns 'Enabled' or 'Disabled'."""
         result = subprocess.run(
-            ["schtasks", "/Query", "/TN", self.task_path, "/XML", "ONE"],
+            [system_exe("schtasks"), "/Query", "/TN", self.task_path, "/XML", "ONE"],
             capture_output=True, check=False,
         )
         log.debug("schtasks /Query %s: returncode=%s", self.task_path, result.returncode)
@@ -61,7 +62,7 @@ class ScheduledTaskTweak(Tweak):
         """Runs schtasks /Change to enable or disable the task."""
         flag = "/Enable" if state == "Enabled" else "/Disable"
         result = subprocess.run(
-            ["schtasks", "/Change", "/TN", self.task_path, flag],
+            [system_exe("schtasks"), "/Change", "/TN", self.task_path, flag],
             capture_output=True, check=False,
         )
         log.debug("schtasks /Change %s %s: returncode=%s", self.task_path, flag, result.returncode)

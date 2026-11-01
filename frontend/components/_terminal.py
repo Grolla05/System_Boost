@@ -1,6 +1,9 @@
 """Shared keypress + terminal auto-close helpers for 'run and done' screens."""
 import os
+import subprocess
 import sys
+
+from backend._system import system_exe
 
 ESC_KEYS = (b"\x1b", "\x1b")
 
@@ -45,7 +48,7 @@ def clear_screen(console):
     if not console.is_terminal:
         return
     if os.name == 'nt':
-        os.system("cls")
+        subprocess.run([system_exe("cmd"), "/c", "cls"], check=False)
     else:
         console.file.write("\x1b[2J\x1b[3J\x1b[H")
         console.file.flush()

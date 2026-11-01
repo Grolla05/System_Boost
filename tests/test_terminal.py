@@ -12,17 +12,18 @@ def _console(is_terminal):
 def test_clear_screen_runs_cls_on_windows_terminal(monkeypatch):
     calls = []
     monkeypatch.setattr(_terminal.os, "name", "nt")
-    monkeypatch.setattr(_terminal.os, "system", lambda cmd: calls.append(cmd) or 0)
+    monkeypatch.setattr(_terminal.subprocess, "run", lambda cmd, **kwargs: calls.append(cmd))
 
     _terminal.clear_screen(_console(True))
 
-    assert calls == ["cls"]
+    assert calls[0][0].lower().endswith(r"\cmd.exe")
+    assert calls[0][1:] == ["/c", "cls"]
 
 
 def test_clear_screen_skips_cls_when_piped(monkeypatch):
     calls = []
     monkeypatch.setattr(_terminal.os, "name", "nt")
-    monkeypatch.setattr(_terminal.os, "system", lambda cmd: calls.append(cmd) or 0)
+    monkeypatch.setattr(_terminal.subprocess, "run", lambda cmd, **kwargs: calls.append(cmd))
 
     _terminal.clear_screen(_console(False))
 

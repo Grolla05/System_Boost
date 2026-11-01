@@ -5,6 +5,7 @@ try:
 except ImportError:  # pragma: no cover - non-Windows dev machine
     winreg = None
 
+from backend._system import system_exe
 from backend.logger import get_logger
 
 from .base import Tweak, TweakError
@@ -49,7 +50,7 @@ class HibernationTweak(Tweak):
     def _set_hibernation(self, value):
         """Runs powercfg /hibernate on|off."""
         flag = "on" if value else "off"
-        result = subprocess.run(["powercfg", "/hibernate", flag], capture_output=True, check=False)
+        result = subprocess.run([system_exe("powercfg"), "/hibernate", flag], capture_output=True, check=False)
         log.debug("powercfg /hibernate %s: returncode=%s", flag, result.returncode)
         if result.returncode != 0:
             log.error("powercfg /hibernate: stdout=%r stderr=%r", result.stdout, result.stderr)
