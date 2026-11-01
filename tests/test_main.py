@@ -210,7 +210,7 @@ def test_clean_with_log_reports_each_folder(monkeypatch, tmp_path):
 
     mlog = _FakeLog()
     sizes = {"User Temp": 1024, "System Temp": 2048}
-    monkeypatch.setattr(main, "clean_directory", lambda path, cb, dry_run=False: sizes[path])
+    monkeypatch.setattr(main, "clean_directory", lambda path, cb, dry_run=False, **rules: sizes[path])
 
     total_formatted, total_bytes = main._clean_with_log(mlog, {"User Temp": "User Temp", "System Temp": "System Temp"}, dry_run=False)
 

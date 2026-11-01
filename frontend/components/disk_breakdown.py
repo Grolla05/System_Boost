@@ -1,29 +1,13 @@
 """Disk space breakdown and pre-scan visualization panel."""
-import os
 from rich import box
 from rich.panel import Panel
 
-from backend.cleaner import format_size
+from backend.cleaner import format_size, get_dir_size
 
 
 def measure_paths_sizes(paths: dict) -> dict:
     """Calculates total bytes occupied in each directory, handling errors gracefully."""
-    measured = {}
-    for name, path in paths.items():
-        total = 0
-        try:
-            if os.path.exists(path):
-                for root, dirs, files in os.walk(path):
-                    for f in files:
-                        try:
-                            fp = os.path.join(root, f)
-                            total += os.path.getsize(fp)
-                        except (OSError, PermissionError):
-                            pass
-        except Exception:
-            pass
-        measured[name] = total
-    return measured
+    return {name: get_dir_size(path) for name, path in paths.items()}
 
 
 def create_disk_breakdown_panel(sizes: dict, bar_width: int = 20) -> Panel:
