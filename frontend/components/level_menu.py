@@ -2,11 +2,12 @@ import os
 import sys
 from rich import box
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.prompt import Confirm, IntPrompt
 from rich.text import Text
 
-from backend.profiles import LEVEL_ORDER, LEVELS
+from backend.profiles import LEVEL_ORDER, LEVELS, preview_tweak_items
 from backend.tweaks import catalog as tweaks_catalog
 from ..audio import play_blip, play_select
 from ._terminal import clear_screen, flush_input
@@ -20,6 +21,7 @@ EXIT_CHOICE = "exit"
 _OPTIONS = tuple(LEVEL_ORDER) + (INFO_CHOICE, UNDO_CHOICE)
 REVERT_HINT = "opção 6 do menu ou `python main.py undo --all`"
 _DIGIT_KEYS = tuple(str(i) for i in range(1, len(_OPTIONS) + 1))
+_PREVIEW_LIMIT = 30
 
 
 def _is_interactive_terminal() -> bool:
@@ -225,15 +227,21 @@ def display_level_summary(console: Console, level_id, clean_paths, applicable_id
                 "os arquivos não poderão ser restaurados.[/warning]")
     lines += ["", "[bold accent]Ajustes a aplicar:[/bold accent]"]
 
+    preview = preview_tweak_items(applicable_ids)
     for tweak_id in applicable_ids:
         lines.append(f"  [bold warning]⚡ {tweaks_catalog.get_tweak(tweak_id).label}[/bold warning]")
+        names = preview.get(tweak_id, ())
+        lines += [f"      [dim]• {escape(name)}[/dim]" for name in names[:_PREVIEW_LIMIT]]
+        if len(names) > _PREVIEW_LIMIT:
+            lines.append(f"      [dim]... e mais {len(names) - _PREVIEW_LIMIT}[/dim]")
     if not applicable_ids:
         lines.append("  [dim](nenhum)[/dim]")
     else:
         lines.append("")
         lines.append(f"[dim]Reversível: {REVERT_HINT}[/dim]")
         if any(t in applicable_ids for t in ("startup_apps", "third_party_services", "third_party_tasks")):
-            lines.append("[dim]Preservados: itens do Windows, antivírus, drivers, VPN e OneDrive.[/dim]")
+            lines.append("[dim]Preservados: itens do Windows, antivírus, drivers, VPN, bancos de dados, backup, "
+                         "licenças e atualizadores reconhecidos.[/dim]")
         if "hibernation" in applicable_ids:
             lines.append("[warning]Hibernação off: apaga o hiberfil.sys e perde hibernação/inicialização rápida.[/warning]")
 

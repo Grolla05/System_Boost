@@ -23,7 +23,7 @@ def test_metadata_requires_admin():
 
 def test_get_current_value_keeps_only_third_party(monkeypatch):
     monkeypatch.setattr(mod, "discover_services", lambda: [
-        _svc("MyUpdater", r'"C:\Program Files\MyApp\updater.exe" /svc'),
+        _svc("MyAgent", r'"C:\Program Files\MyApp\agent.exe" /svc'),
         _svc("Dhcp", r"C:\Windows\system32\svchost.exe -k LocalService"),
         _svc("AvastSvc", r"C:\Program Files\Avast Software\Avast\AvastSvc.exe"),
         _svc("MyDelayed", r"C:\Program Files\MyApp\d.exe", start_type="delayed-auto"),
@@ -32,7 +32,7 @@ def test_get_current_value_keeps_only_third_party(monkeypatch):
     value = ThirdPartyServicesTweak().get_current_value()
 
     assert value == [
-        {"name": "MyUpdater", "start_type": "auto"},
+        {"name": "MyAgent", "start_type": "auto"},
         {"name": "MyDelayed", "start_type": "delayed-auto"},
     ]
     json.dumps(value)
@@ -40,14 +40,14 @@ def test_get_current_value_keeps_only_third_party(monkeypatch):
 
 def test_apply_sets_demand_and_stops(monkeypatch):
     calls = []
-    monkeypatch.setattr(mod, "discover_services", lambda: [_svc("MyUpdater", r"C:\MyApp\u.exe")])
+    monkeypatch.setattr(mod, "discover_services", lambda: [_svc("MyAgent", r"C:\MyApp\u.exe")])
     monkeypatch.setattr(mod, "set_start_type", lambda n, t: calls.append(("config", n, t)))
     monkeypatch.setattr(mod, "stop_service", lambda n: calls.append(("stop", n)))
 
     result = ThirdPartyServicesTweak().apply()
 
-    assert calls == [("config", "MyUpdater", "demand"), ("stop", "MyUpdater")]
-    assert result == [{"name": "MyUpdater"}]
+    assert calls == [("config", "MyAgent", "demand"), ("stop", "MyAgent")]
+    assert result == [{"name": "MyAgent"}]
 
 
 def test_apply_failure_on_one_service_does_not_abort(monkeypatch):

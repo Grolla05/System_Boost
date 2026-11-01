@@ -23,6 +23,7 @@ def test_metadata_requires_admin():
 
 def test_get_current_value_keeps_only_third_party(monkeypatch):
     monkeypatch.setattr(mod, "discover_tasks", lambda: [
+        _task(r"\VendorSync", r"C:\Program Files\Vendor\sync.exe"),
         _task(r"\GoogleUpdateTaskMachineCore", r"C:\Program Files\Google\Update\GoogleUpdate.exe"),
         _task(r"\MicrosoftEdgeUpdateTaskMachineCore", r"C:\Program Files (x86)\Microsoft\EdgeUpdate\MicrosoftEdgeUpdate.exe"),
         _task(r"\OneDrive Standalone Update Task", r"C:\Users\x\AppData\Local\Microsoft\OneDrive\OneDriveStandaloneUpdater.exe"),
@@ -32,7 +33,7 @@ def test_get_current_value_keeps_only_third_party(monkeypatch):
 
     value = ThirdPartyTasksTweak().get_current_value()
 
-    assert value == [{"task": r"\GoogleUpdateTaskMachineCore"}]
+    assert value == [{"task": r"\VendorSync"}]
     json.dumps(value)
 
 

@@ -339,3 +339,26 @@ def test_cmd_menu_survives_unexpected_error_during_undo(monkeypatch):
 
     assert any("kaboom" in m for m in calls["errors"])
     assert calls["summary"] == ["leve"]  # menu kept running
+
+
+def _briefing_text(monkeypatch, preview):
+    out, console = _console()
+    monkeypatch.setattr(level_menu, "preview_tweak_items", lambda ids: preview)
+    with patch("rich.prompt.Confirm.ask", return_value=True):
+        level_menu.display_level_summary(console, "leve", {}, ["startup_apps"], [])
+    return out.getvalue()
+
+
+def test_briefing_lists_each_item_and_escapes_markup(monkeypatch):
+    text = _briefing_text(monkeypatch, {"startup_apps": ["Discord", "App [beta]"]})
+
+    assert "Discord" in text
+    assert "App [beta]" in text
+
+
+def test_briefing_caps_long_item_lists(monkeypatch):
+    text = _briefing_text(monkeypatch, {"startup_apps": [f"item{i}" for i in range(35)]})
+
+    assert "item29" in text
+    assert "item30" not in text
+    assert "e mais 5" in text

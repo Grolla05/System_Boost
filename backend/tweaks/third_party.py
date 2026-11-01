@@ -1,7 +1,7 @@
 """Shared filter deciding whether a startup item / service / task belongs to third-party software.
 
 Anything owned by Windows or Microsoft, or matching the exceptions list (security software,
-hardware drivers, VPNs, cloud sync), is never touched.
+hardware drivers, VPNs, databases, backup, licensing, updaters), is never touched.
 """
 import os
 import re
@@ -10,8 +10,10 @@ import re
 # so 'amd' protects 'amdrsserv' but not 'ramdisk'. Edit this tuple to protect more software.
 EXCEPTION_NAMES = (
     # security
-    "defender", "securityhealth", "windows security", "avast", "avg", "kaspersky", "norton",
-    "mcafee", "bitdefender", "eset", "malwarebytes", "sophos", "trend micro", "webroot",
+    "defender", "securityhealth", "windows security", "avast", "avg", "avira", "kaspersky", "norton",
+    "mcafee", "bitdefender", "eset", "malwarebytes", "sophos", "trend micro", "webroot", "crowdstrike",
+    "csfalcon", "sentinel", "cylance", "cisco", "fortinet", "forticlient", "paloalto", "f-secure",
+    "fsecure", "comodo", "panda", "gdata", "zonealarm",
     # hardware drivers / peripherals / audio
     "nvidia", "nv", "amd", "radeon", "intel", "realtek", "rtk", "synaptics", "elan", "logitech",
     "logi", "razer", "corsair", "steelseries", "asus", "dell", "hp", "lenovo", "msi", "bluetooth",
@@ -22,11 +24,6 @@ EXCEPTION_NAMES = (
     "wsl", "docker", "vmware", "virtualbox", "hyper",
     # Microsoft-branded
     "microsoft", "windows",
-)
-
-# Extra protection used only for startup apps (Run keys / Startup folders). Services and scheduled
-# tasks keep the base list above. Same word-start matching rules.
-STARTUP_EXTRA_EXCEPTION_NAMES = (
     # databases
     "mysql", "mariadb", "postgres", "pgadmin", "mssql", "sqlserver", "sqlagent", "sqlbrowser",
     "sqlwriter", "ssms", "mongod", "mongodb", "compass", "redis", "memurai", "oracle", "firebird",
@@ -35,15 +32,24 @@ STARTUP_EXTRA_EXCEPTION_NAMES = (
     # backup / cloud sync / password managers / 2FA
     "dropbox", "google drive", "googledrive", "nextcloud", "syncthing", "resilio", "mega", "veeam",
     "acronis", "backblaze", "bitwarden", "1password", "keepass", "yubico", "authy",
+    # VPN
+    "wireguard", "tailscale", "zerotier",
+    # software licensing
+    "autodesk", "adsk", "flexnet", "flexlm", "hasp", "codemeter", "wibu",
 )
 
+# Matched anywhere in a word: these usually come glued to a vendor name (OpenVPN, GoogleUpdater).
+ANYWHERE_NAMES = ("vpn", "update", "trendmicro")
 
-def _compile(names):
-    return re.compile(r"(?<![a-z])(?:" + "|".join(re.escape(n) for n in names) + ")", re.IGNORECASE)
+
+def _compile(names, anywhere=()):
+    pattern = r"(?<![a-z])(?:" + "|".join(re.escape(n) for n in names) + ")"
+    if anywhere:
+        pattern += "|" + "|".join(re.escape(n) for n in anywhere)
+    return re.compile(pattern, re.IGNORECASE)
 
 
-_EXCEPTION_RE = _compile(EXCEPTION_NAMES)
-_STARTUP_EXCEPTION_RE = _compile(EXCEPTION_NAMES + STARTUP_EXTRA_EXCEPTION_NAMES)
+_EXCEPTION_RE = _compile(EXCEPTION_NAMES, ANYWHERE_NAMES)
 
 
 def extract_executable(command):
@@ -69,11 +75,10 @@ def _is_windows_owned(path):
     return "\\microsoft" in normalized
 
 
-def is_third_party(name, command, display=None, *, startup=False):
+def is_third_party(name, command, display=None):
     """True only for items clearly owned by third-party software and not on the exceptions list.
 
-    An empty command means the owner is unknown, so the item is left alone. startup=True also
-    protects databases, dev servers, cloud sync and password managers (see STARTUP_EXTRA_EXCEPTION_NAMES).
+    An empty command means the owner is unknown, so the item is left alone.
     """
     executable = extract_executable(command)
     if not executable:
@@ -81,5 +86,4 @@ def is_third_party(name, command, display=None, *, startup=False):
     if _is_windows_owned(executable):
         return False
     haystack = " ".join(part for part in (name, display, executable) if part)
-    pattern = _STARTUP_EXCEPTION_RE if startup else _EXCEPTION_RE
-    return pattern.search(haystack) is None
+    return _EXCEPTION_RE.search(haystack) is None

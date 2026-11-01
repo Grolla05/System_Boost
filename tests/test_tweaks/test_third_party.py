@@ -52,9 +52,11 @@ def test_short_exception_names_do_not_match_inside_other_words():
     assert third_party.is_third_party("RamDisk", r"C:\Tools\ramdisk\ramdisk.exe")
 
 
-STARTUP_PROTECTED = [
+PROTECTED = [
     # databases
     ("MySQL Workbench", r"C:\Program Files\MySQL\MySQL Workbench 8.0\MySQLWorkbench.exe"),
+    ("MySQL80", r'"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqld.exe"'),
+    ("postgresql-x64-16", r'"C:\Program Files\PostgreSQL\16\bin\pg_ctl.exe"'),
     ("pgAdmin 4", r"C:\Program Files\PostgreSQL\16\pgAdmin 4\runtime\pgAdmin4.exe"),
     ("MongoDB Compass", r"C:\Users\x\AppData\Local\MongoDBCompass\MongoDBCompass.exe"),
     ("Redis", r"C:\Tools\redis\redis-server.exe"),
@@ -65,24 +67,28 @@ STARTUP_PROTECTED = [
     ("Veeam Agent", r"C:\Program Files\Veeam\Endpoint Backup\Veeam.EndPoint.Tray.exe"),
     ("Bitwarden", r"C:\Users\x\AppData\Local\Programs\Bitwarden\Bitwarden.exe"),
     ("1Password", r"C:\Users\x\AppData\Local\1Password\app\8\1Password.exe"),
+    # VPN
+    ("OpenVPNService", r"C:\Program Files\OpenVPN\bin\openvpnserv.exe"),
+    ("WireGuardManager", r"C:\Program Files\WireGuard\wireguard.exe"),
+    ("Tailscale", r"C:\Program Files\Tailscale\tailscaled.exe"),
+    # security
+    ("CSFalconService", r"C:\Program Files\CrowdStrike\CSFalconService.exe"),
+    ("Avira.Spotlight", r"C:\Program Files\Avira\Security\Avira.exe"),
+    ("TrendMicroX", r"C:\Program Files\TrendMicro\svc.exe"),
+    # licensing
+    ("AdskLicensingService", r"C:\Program Files (x86)\Common Files\Autodesk Shared\AdskLicensing\svc.exe"),
+    ("FlexNet Licensing", r"C:\Program Files\Common Files\Macrovision Shared\lmgrd.exe"),
+    # updaters
+    ("GoogleUpdaterTaskSystem", r"C:\Program Files\Google\GoogleUpdater\updater.exe"),
+    ("Firefox Background Update", r"C:\Program Files\Mozilla Firefox\firefox.exe"),
 ]
 
 
-@pytest.mark.parametrize("name,command", STARTUP_PROTECTED)
-def test_startup_mode_protects_servers_databases_sync_and_passwords(name, command):
-    assert not third_party.is_third_party(name, command, startup=True)
+@pytest.mark.parametrize("name,command", PROTECTED)
+def test_protected_software_is_never_third_party(name, command):
+    assert not third_party.is_third_party(name, command)
 
 
-@pytest.mark.parametrize("name,command", STARTUP_PROTECTED)
-def test_extra_startup_names_do_not_affect_services_and_tasks(name, command):
-    # Default mode (services / scheduled tasks) keeps the original exceptions list.
-    # Items that only match via their path in the original list are filtered out of this check.
-    from backend.tweaks.third_party import EXCEPTION_NAMES, _compile
-    if _compile(EXCEPTION_NAMES).search(" ".join((name, third_party.extract_executable(command)))):
-        pytest.skip("already protected by the base exceptions list")
-    assert third_party.is_third_party(name, command)
-
-
-def test_startup_mode_still_flags_ordinary_apps():
-    assert third_party.is_third_party("Spotify", r"C:\Users\x\AppData\Roaming\Spotify\Spotify.exe", startup=True)
-    assert third_party.is_third_party("RamDisk", r"C:\Tools\ramdisk\ramdisk.exe", startup=True)
+def test_ordinary_apps_stay_flagged():
+    assert third_party.is_third_party("Discord", r"C:\Users\x\AppData\Local\Discord\Discord.exe")
+    assert third_party.is_third_party("RamDisk", r"C:\Tools\ramdisk\ramdisk.exe")
