@@ -3,6 +3,7 @@ import json
 import pytest
 
 from backend import drivers, nvidia_driver
+from backend import _powershell
 
 GUID_A = "11111111-1111-1111-1111-111111111111"
 GUID_B = "22222222-2222-2222-2222-222222222222"
@@ -54,7 +55,7 @@ def _install_fail():
 
 
 def _patch(monkeypatch, fake, admin=True):
-    monkeypatch.setattr(drivers.subprocess, "run", fake)
+    monkeypatch.setattr(_powershell.subprocess, "run", fake)
     monkeypatch.setattr(drivers, "is_admin", lambda: admin)
 
 
@@ -98,9 +99,9 @@ def test_scan_invalid_json_raises(monkeypatch):
 
 def test_scan_timeout_raises_driver_error(monkeypatch):
     def boom(cmd, **kwargs):
-        raise drivers.subprocess.TimeoutExpired(cmd, 1)
+        raise _powershell.subprocess.TimeoutExpired(cmd, 1)
 
-    monkeypatch.setattr(drivers.subprocess, "run", boom)
+    monkeypatch.setattr(_powershell.subprocess, "run", boom)
     with pytest.raises(drivers.DriverError):
         drivers.scan_drivers()
 
@@ -110,7 +111,7 @@ def test_scan_uses_argv_list_and_timeout(monkeypatch):
     _patch(monkeypatch, fake)
     drivers.scan_drivers()
     cmd, kwargs = fake.calls[0]
-    assert isinstance(cmd, list) and cmd[0].lower().startswith("powershell")
+    assert isinstance(cmd, list) and cmd[0].lower().endswith(r"\powershell.exe")
     assert kwargs.get("capture_output") is True
     assert kwargs.get("timeout")
 
@@ -222,7 +223,7 @@ def test_powershell_does_not_inherit_console_stdin(monkeypatch):
 
     drivers.scan_drivers()
 
-    assert fake.calls[0][1]["stdin"] is drivers.subprocess.DEVNULL
+    assert fake.calls[0][1]["stdin"] is _powershell.subprocess.DEVNULL
 
 
 def test_update_all_on_result_reports_each_driver(monkeypatch):

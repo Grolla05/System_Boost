@@ -5,6 +5,7 @@ try:
 except ImportError:  # pragma: no cover - non-Windows dev machine
     winreg = None
 
+from backend._system import system_exe
 from backend.logger import get_logger
 
 from .base import Tweak, TweakError
@@ -45,7 +46,7 @@ class ServiceStateTweak(Tweak):
     def apply(self):
         """Sets the service's start type to target_start_type and stops it."""
         self._set_start_type(self.target_start_type)
-        stop = subprocess.run(["sc", "stop", self.service_name], capture_output=True, check=False)
+        stop = subprocess.run([system_exe("sc"), "stop", self.service_name], capture_output=True, check=False)
         log.debug("sc stop %s: returncode=%s", self.service_name, stop.returncode)
         return self.target_start_type
 
@@ -53,13 +54,13 @@ class ServiceStateTweak(Tweak):
         """Restores the service's previous start type, restarting it if it used to auto-start."""
         self._set_start_type(previous_value)
         if previous_value in _STARTABLE_TYPES:
-            subprocess.run(["sc", "start", self.service_name], capture_output=True, check=False)
+            subprocess.run([system_exe("sc"), "start", self.service_name], capture_output=True, check=False)
         return previous_value
 
     def _set_start_type(self, start_type):
         """Runs sc config to set the service's start type, raising TweakError on failure."""
         result = subprocess.run(
-            ["sc", "config", self.service_name, "start=", start_type],
+            [system_exe("sc"), "config", self.service_name, "start=", start_type],
             capture_output=True, check=False,
         )
         log.debug("sc config %s start=%s: returncode=%s", self.service_name, start_type, result.returncode)

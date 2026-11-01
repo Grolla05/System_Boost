@@ -14,13 +14,11 @@ _FORMAT = "%(asctime)s | %(levelname)-7s | %(name)s | %(message)s"
 
 
 def default_log_dir():
-    """Returns <project root>/logs; for a frozen exe, the parent of dist/ (or the exe's own dir)."""
+    """Returns <project root>/logs; for a frozen exe, %LOCALAPPDATA%\\WinCleaner\\logs (Program Files is read-only)."""
     if getattr(sys, "frozen", False):
-        exe_dir = Path(sys.executable).resolve().parent
-        base = exe_dir.parent if exe_dir.name.lower() == "dist" else exe_dir
-    else:
-        base = Path(__file__).resolve().parent.parent
-    return base / "logs"
+        local = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        return Path(local) / "WinCleaner" / "logs"
+    return Path(__file__).resolve().parent.parent / "logs"
 
 
 def get_logger(name):

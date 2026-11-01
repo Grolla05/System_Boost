@@ -3,6 +3,7 @@ import json
 import subprocess
 
 from backend._powershell import PS_PRELUDE, PowerShellError, run_powershell
+from backend._system import system_exe
 from backend.logger import get_logger
 
 from . import third_party
@@ -43,7 +44,7 @@ def discover_tasks():
 def set_task_enabled(task, enabled):
     """Runs schtasks /Change to enable or disable the task; raises OSError on failure."""
     flag = "/Enable" if enabled else "/Disable"
-    result = subprocess.run(["schtasks", "/Change", "/TN", task, flag], capture_output=True, check=False)
+    result = subprocess.run([system_exe("schtasks"), "/Change", "/TN", task, flag], capture_output=True, check=False)
     log.debug("schtasks /Change %s %s: returncode=%s", task, flag, result.returncode)
     if result.returncode != 0:
         raise OSError(f"schtasks /Change {task} {flag} retornou {result.returncode}")

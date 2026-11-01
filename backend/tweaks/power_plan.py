@@ -5,6 +5,7 @@ try:
 except ImportError:  # pragma: no cover - non-Windows dev machine
     winreg = None
 
+from backend._system import system_exe
 from backend.logger import get_logger
 
 from .base import Tweak, TweakError
@@ -53,7 +54,7 @@ class PowerPlanTweak(Tweak):
 
     def _set_active(self, guid):
         """Runs powercfg /setactive for the given scheme GUID."""
-        result = subprocess.run(["powercfg", "/setactive", guid], capture_output=True, check=False)
+        result = subprocess.run([system_exe("powercfg"), "/setactive", guid], capture_output=True, check=False)
         log.debug("powercfg /setactive %s: returncode=%s", guid, result.returncode)
         if result.returncode != 0:
             log.error("powercfg /setactive: stdout=%r stderr=%r", result.stdout, result.stderr)

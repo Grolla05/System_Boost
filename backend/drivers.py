@@ -1,8 +1,8 @@
 import json
 import re
-import subprocess
 
 from backend import nvidia_driver
+from backend._powershell import PS_PRELUDE, PowerShellError, run_powershell
 from backend.logger import get_logger
 from backend.privileges import is_admin
 
@@ -16,9 +16,7 @@ _GUID_RE = re.compile(r"^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
 # Windows Update Agent ResultCode: 2 = succeeded, 3 = succeeded with errors.
 _OK_CODES = (2,)
 
-_PS_PRELUDE = "[Console]::OutputEncoding=[Text.Encoding]::UTF8;$ErrorActionPreference='Stop';"
-
-_SCAN_SCRIPT = _PS_PRELUDE + (
+_SCAN_SCRIPT = PS_PRELUDE + (
     "$s=New-Object -ComObject Microsoft.Update.Session;"
     "$r=$s.CreateUpdateSearcher().Search(\"IsInstalled=0 and Type='Driver'\");"
     "$o=@();"
@@ -29,7 +27,7 @@ _SCAN_SCRIPT = _PS_PRELUDE + (
     "ConvertTo-Json -InputObject @($o) -Compress"
 )
 
-_INSTALL_SCRIPT = _PS_PRELUDE + (
+_INSTALL_SCRIPT = PS_PRELUDE + (
     "$s=New-Object -ComObject Microsoft.Update.Session;"
     "$r=$s.CreateUpdateSearcher().Search(\"UpdateID='{update_id}'\");"
     "if($r.Updates.Count -eq 0){{throw 'update nao encontrado'}};"
@@ -47,25 +45,10 @@ class DriverError(Exception):
 
 
 def _run_powershell(script, timeout):
-    log.debug("powershell: executando (timeout=%ss), script=%.200s", timeout, script)
     try:
-        result = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-             "-Command", script],
-            capture_output=True, check=False, timeout=timeout, stdin=subprocess.DEVNULL,
-        )
-    except subprocess.TimeoutExpired:
-        log.error("powershell: timeout após %ss", timeout)
-        raise DriverError("tempo esgotado aguardando o Windows Update")
-    except OSError as exc:
-        log.error("powershell: não executou: %s", exc)
-        raise DriverError(f"não foi possível executar o PowerShell: {exc}")
-    log.debug("powershell: returncode=%s", result.returncode)
-    if result.returncode != 0:
-        detail = (result.stderr or b"").decode("utf-8", errors="replace").strip()
-        log.error("powershell: stderr=%s", detail[:500])
-        raise DriverError(f"PowerShell retornou {result.returncode}: {detail}"[:300])
-    return (result.stdout or b"").decode("utf-8-sig", errors="replace").strip()
+        return run_powershell(script, timeout)
+    except PowerShellError as exc:
+        raise DriverError(str(exc)) from exc
 
 
 def _parse_json(text):

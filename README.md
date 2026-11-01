@@ -19,7 +19,7 @@ A high-performance Windows CLI utility that cleans temporary files and applies r
 
 ### Para usar o programa
 
-Baixe e execute `System Boost Setup.exe`. O instalador configura o aplicativo no perfil do usuário, cria um atalho no menu Iniciar e registra o desinstalador. Python e dependências do projeto não são necessários na máquina de destino; eles já estão incorporados no executável. Ao iniciar o aplicativo, o Windows ainda solicitará elevação pelo UAC.
+Baixe e execute `System Boost Setup.exe`. O instalador pede Administrador, instala em Program Files (removendo a cópia antiga por usuário, se houver), cria atalhos e registra o desinstalador. Python e dependências do projeto não são necessários na máquina de destino; eles já estão incorporados no executável. Ao iniciar o aplicativo, o Windows ainda solicitará elevação pelo UAC.
 
 ### Para gerar o instalador (Windows)
 

@@ -1,5 +1,6 @@
 import subprocess
 
+from backend._system import powershell_exe
 from backend.logger import get_logger
 
 log = get_logger("powershell")
@@ -16,7 +17,7 @@ def run_powershell(script, timeout):
     log.debug("powershell: executando (timeout=%ss), script=%.200s", timeout, script)
     try:
         result = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+            [powershell_exe(), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
              "-Command", script],
             capture_output=True, check=False, timeout=timeout, stdin=subprocess.DEVNULL,
         )
