@@ -1,5 +1,12 @@
 # Changes
 
+## Documentação reorganizada em módulos
+
+- `docs/`: módulos numerados de 01 a 10, `funcionalidades/` (um documento por feature) e `modulos/` (um por área do código), no modelo do OhmFlow. `docs/funcionamento.md` foi dividido entre eles.
+- `README.md`: reescrito em pt-BR como cartão de boas-vindas.
+- `.github/`: `CONTRIBUTING.md`, `COMMIT_CONVENTION.md`, `SECURITY.md`, modelo de PR e modelos de issue.
+- Correções em relação à documentação anterior: Lixeira sai no Stage 1, `clean` não trata Lixeira, npm e uv, e ainda não há Releases publicadas.
+
 ## Instalação NVIDIA confirmada pela versão
 
 - `nvidia_driver.py`: após o instalador, a versão relida do Windows decide o resultado. Driver novo presente é sucesso com qualquer código de saída; código 0 com driver antigo pede reinício.
