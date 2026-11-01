@@ -97,6 +97,31 @@ def update_all_drivers(progress_callback=None, on_scan=None, dry_run=False, on_r
         return [("Drivers", None, "requer administrador")], False
 
     results = []
+    reboot_required = False
+
+    def record(title, status, note):
+        results.append((title, status, note))
+        if on_result:
+            on_result(title, status, note)
+
+    def install_one(title, install, error, notice=None):
+        nonlocal reboot_required
+        if progress_callback:
+            progress_callback(title)
+        if dry_run:
+            record(title, None, "dry-run")
+            return
+        if notice and on_notice:
+            on_notice(notice)
+        try:
+            ok, reboot, note = install()
+        except error as exc:
+            log.error("drivers: '%s' falhou: %s", title, exc)
+            ok, reboot, note = False, False, str(exc)
+        log.info("drivers: '%s' ok=%s reboot=%s nota=%s", title, ok, reboot, note)
+        reboot_required = reboot_required or reboot
+        record(title, ok, note)
+
     scan_failed = False
     try:
         found = scan_drivers()
@@ -111,56 +136,18 @@ def update_all_drivers(progress_callback=None, on_scan=None, dry_run=False, on_r
         nvidia_update = nvidia_driver.check_update()
     except nvidia_driver.NvidiaDriverError as exc:
         log.error("drivers: NVIDIA não verificada: %s", exc)
-        results.append(("NVIDIA", None, str(exc)))
-        if on_result:
-            on_result("NVIDIA", None, str(exc))
+        record("NVIDIA", None, str(exc))
 
     if on_scan and not scan_failed:
         on_scan(len(found) + (1 if nvidia_update else 0))
 
-    reboot_required = False
     for item in found:
         title = item.get("title") or item.get("model") or "Driver"
-        if progress_callback:
-            progress_callback(title)
-        if dry_run:
-            results.append((title, None, "dry-run"))
-            if on_result:
-                on_result(title, None, "dry-run")
-            continue
-        try:
-            ok, reboot, note = install_driver(item.get("update_id"))
-        except DriverError as exc:
-            log.error("drivers: '%s' falhou: %s", title, exc)
-            results.append((title, False, str(exc)))
-            if on_result:
-                on_result(title, False, str(exc))
-            continue
-        log.info("drivers: '%s' ok=%s reboot=%s nota=%s", title, ok, reboot, note)
-        reboot_required = reboot_required or reboot
-        results.append((title, ok, note))
-        if on_result:
-            on_result(title, ok, note)
+        install_one(title, lambda item=item: install_driver(item.get("update_id")), DriverError)
 
     if nvidia_update:
-        title = nvidia_update.title
-        if progress_callback:
-            progress_callback(title)
-        if dry_run:
-            results.append((title, None, "dry-run"))
-            if on_result:
-                on_result(title, None, "dry-run")
-        else:
-            if on_notice:
-                on_notice(nvidia_driver.FLICKER_WARNING)
-            try:
-                ok, reboot, note = nvidia_driver.install_update(nvidia_update)
-            except nvidia_driver.NvidiaDriverError as exc:
-                log.error("drivers: '%s' falhou: %s", title, exc)
-                ok, reboot, note = False, False, str(exc)
-            log.info("drivers: '%s' ok=%s reboot=%s nota=%s", title, ok, reboot, note)
-            reboot_required = reboot_required or reboot
-            results.append((title, ok, note))
-            if on_result:
-                on_result(title, ok, note)
+        install_one(
+            nvidia_update.title, lambda: nvidia_driver.install_update(nvidia_update),
+            nvidia_driver.NvidiaDriverError, notice=nvidia_driver.FLICKER_WARNING,
+        )
     return results, reboot_required

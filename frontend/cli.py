@@ -2,7 +2,6 @@ import sys
 from rich.console import Console
 from rich.theme import Theme
 from .components.welcome import display_welcome_screen
-from .components.loading import run_cleanup_with_loading
 from .components.completion import display_completion_screen
 from .components.tweak_list import display_tweak_list
 from .components.tweak_result import display_tweak_success, display_tweak_error, display_undo_all_results
@@ -12,7 +11,7 @@ from .components.level_menu import (
 )
 from .components.undo_menu import display_undo_confirm, display_undo_empty, display_undo_results
 from .components.level_completion import display_level_completion
-from .components.driver_progress import run_driver_update_with_progress, format_driver_summary
+from .components.driver_progress import format_driver_summary
 from .components.machine_info import display_machine_info
 from .components.live_log import MissionLog
 
@@ -57,9 +56,6 @@ def cycle_active_palette() -> str:
 
 def show_welcome(skip_wait=False):
     display_welcome_screen(console, skip_wait=skip_wait)
-
-def show_loading(paths, clean_func, format_func, dry_run=False):
-    return run_cleanup_with_loading(console, paths, clean_func, format_func, dry_run=dry_run)
 
 def show_mission_log(title):
     """Returns a MissionLog context manager: live step-by-step log (running / OK / FAIL / SKIP)."""
@@ -106,9 +102,6 @@ def show_driver_confirm():
 
 def show_clean_confirm(paths):
     return display_clean_confirm(console, paths)
-
-def show_driver_update(update_func, dry_run=False):
-    return run_driver_update_with_progress(console, update_func, dry_run=dry_run)
 
 def show_level_completion(level_label, total_formatted, tweak_results, close_terminal=True, skip_wait=False, driver_summary=None, clear=True):
     return display_level_completion(

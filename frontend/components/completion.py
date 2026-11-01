@@ -19,8 +19,8 @@ def display_completion_screen(console: Console, total_formatted, dry_run=False, 
     verb = "seriam limpos" if dry_run else "foram limpos"
 
     body = (
-        f"[bold #9bbc0f]★ ★ ★ {title} ★ ★ ★[/bold #9bbc0f]\n\n"
-        f"[bold #cadc9f]TOTAL SCORE: {total_formatted} {verb} do seu sistema[/bold #cadc9f]"
+        f"[highlight]★ ★ ★ {title} ★ ★ ★[/highlight]\n\n"
+        f"[warning]TOTAL SCORE: {total_formatted} {verb} do seu sistema[/warning]"
     )
     if driver_summary:
         body += f"\n\n{driver_summary}"
@@ -28,7 +28,7 @@ def display_completion_screen(console: Console, total_formatted, dry_run=False, 
     success_panel = Panel(
         body,
         box=box.DOUBLE,
-        border_style="bold #8bac0f",
+        border_style="border",
         expand=False,
         padding=(1, 4)
     )

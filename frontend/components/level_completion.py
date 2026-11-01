@@ -23,12 +23,12 @@ def display_level_completion(console: Console, level_label, total_formatted, twe
     failed = [r for r in tweak_results if r[1] is False]
 
     body = (
-        f"[bold #9bbc0f]★ ★ ★ OTIMIZAÇÃO {level_label.upper()} CONCLUÍDA ★ ★ ★[/bold #9bbc0f]\n\n"
-        f"[bold #cadc9f]SCORE: {total_formatted} liberados do seu sistema[/bold #cadc9f]\n"
-        f"[bold #8bac0f]BUFFS: {len(applied)} ajuste(s) aplicado(s)[/bold #8bac0f]"
+        f"[highlight]★ ★ ★ OTIMIZAÇÃO {level_label.upper()} CONCLUÍDA ★ ★ ★[/highlight]\n\n"
+        f"[warning]SCORE: {total_formatted} liberados do seu sistema[/warning]\n"
+        f"[accent]BUFFS: {len(applied)} ajuste(s) aplicado(s)[/accent]"
     )
     if already:
-        body += f"\n[dim #cadc9f]  • {len(already)} já aplicado(s) anteriormente[/dim #cadc9f]"
+        body += f"\n[dim]  • {len(already)} já aplicado(s) anteriormente[/dim]"
     if applied or already:
         body += f"\n[dim]  Para reverter: {REVERT_HINT}[/dim]"
     if skipped:
@@ -41,7 +41,7 @@ def display_level_completion(console: Console, level_label, total_formatted, twe
     if driver_summary:
         body += f"\n\n{driver_summary}"
 
-    panel = Panel(body, box=box.DOUBLE, border_style="bold #8bac0f", expand=False, padding=(1, 4))
+    panel = Panel(body, box=box.DOUBLE, border_style="border", expand=False, padding=(1, 4))
     console.print(panel, justify="center")
 
     play_victory()

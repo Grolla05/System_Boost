@@ -65,10 +65,10 @@ def test_items_are_listed_one_per_line_indented_below_step():
     mlog.item("Opera GX Browser Assistant")
 
     out = _render(mlog)
-    lines = [l for l in out.splitlines() if "Spotify" in l or "Opera GX" in l]
+    lines = [line for line in out.splitlines() if "Spotify" in line or "Opera GX" in line]
 
     assert len(lines) == 2
-    assert all(l.lstrip(" │║").startswith(" ") or "└" in l or "↳" in l or "-" in l for l in lines)
+    assert all(line.lstrip(" │║").startswith(" ") or "└" in line or "↳" in line or "-" in line for line in lines)
     assert out.index("Apps de terceiros") < out.index("Spotify") < out.index("Opera GX")
 
 

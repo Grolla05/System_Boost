@@ -1,14 +1,14 @@
-# WinCleaner — System Boost
+# System Boost
 
-A high-performance Windows CLI utility that cleans temporary files and applies reversible system tweaks, with a sleek Apple-inspired terminal UI. Fully local: no login, no account, no license checks, no telemetry sent anywhere, no third-party downloads.
+A high-performance Windows CLI utility that cleans temporary files and applies reversible system tweaks, with a retro 8-bit terminal UI. No login, no account, no license checks, no telemetry. The network is only used for the optional driver step (see [Network and downloads](#network-and-downloads)).
 
 ## Features
 
 - **Guided optimization levels** — `python main.py` with no arguments walks you through 4 escalating levels (Leve/Mediana/Alta/Extrema), each bundling temp cleanup with a matching set of reversible tweaks, with a summary + confirmation before anything runs.
 - **Temp file cleanup** — User Temp, System Temp, Prefetch, SquirrelTemp, Gradle/Go/user caches, plus npm/uv cache clean and Recycle Bin (Stage 2 "Lista C"), with dry-run mode and per-folder selection.
-- **Reversible Windows tweaks** — 7 built-in tweaks (power plan, hibernation, visual effects, telemetry, search indexing, SysMain, compatibility appraiser task). Every tweak reads and saves its current value before changing anything, and can be undone individually or all at once.
+- **Reversible Windows tweaks** — 12 built-in tweaks (power plan, hibernation, visual effects, telemetry, search indexing, SysMain, compatibility appraiser task, startup apps, third-party services and tasks, recommendations & offers, mouse acceleration). Every tweak reads and saves its current value before changing anything, and can be undone individually or all at once.
 - **Machine spec sheet** — `python main.py info` (or option 5 in the guided menu) shows Windows version/build, CPU, installed RAM, GPU(s), system-disk type (SSD/HDD) and notebook vs desktop. Read-only, no Administrator needed; anything that can't be read shows as "desconhecido".
-- **Rich terminal UI** — live progress bar during cleanup, a status table for tweaks, clear success/error panels.
+- **Rich terminal UI** — live mission log with one line per step, a status table for tweaks, clear success/error panels.
 
 ## Requirements
 
@@ -29,7 +29,7 @@ Instale o [Python 3.11 ou superior](https://www.python.org/downloads/windows/) e
 python installer.py
 ```
 
-O script instala as dependências listadas em `requirements.txt`, executa o build existente do PyInstaller e gera `dist/System Boost Setup.exe` (além de `dist/System Boost.exe`). Para empacotar um executável já construído, use `python installer.py --skip-build`.
+O script instala as dependências listadas em `requirements-build.txt`, executa o build existente do PyInstaller e gera `dist/System Boost Setup.exe` (além de `dist/System Boost.exe`). Para empacotar um executável já construído, use `python installer.py --skip-build`.
 
 Se `ISCC.exe` não estiver no `PATH` nem no local padrão do Inno Setup, configure `INNO_SETUP_COMPILER` com o caminho completo do compilador, por exemplo:
 
@@ -86,17 +86,18 @@ python main.py undo <tweak_id>      # restore that tweak's previous value
 python main.py undo --all           # restore every applied tweak
 ```
 
-Available `tweak_id`s: `power_plan`, `hibernation`, `visual_effects`, `telemetry`, `indexing`, `sysmain`, `compat_appraiser`. Most require an elevated (Administrator) terminal — `apply`/`undo` fail with a clear message when not elevated rather than prompting for UAC.
+Available `tweak_id`s: `power_plan`, `hibernation`, `visual_effects`, `telemetry`, `indexing`, `sysmain`, `compat_appraiser`, `startup_apps`, `third_party_services`, `third_party_tasks`, `recommendations_offers`, `mouse_acceleration`. Most require an elevated (Administrator) terminal — `apply`/`undo` fail with a clear message when not elevated rather than prompting for UAC.
 
 Tweak state is stored locally at `%LOCALAPPDATA%\WinCleaner\tweaks_state.json` — nothing leaves your machine.
 
 ## Building the executable
 
 ```bash
-pip install -r requirements.txt
 python build.py
 # output: dist/System Boost.exe
 ```
+
+`build.py` installs `requirements-build.txt`. If signing is configured and fails, the build exits with an error.
 
 Para gerar também o instalador Windows, use `python installer.py` conforme as instruções acima.
 
@@ -111,17 +112,20 @@ python build.py
 
 ## Project structure
 
-- **`backend/`** — core logic, no UI: `cleaner.py`, `privileges.py`, `tweaks/` (the reversible-tweaks subsystem), `profiles.py` (the 4 guided-flow levels), `drivers.py` (Windows Update driver scan/install), `hardware.py` (machine spec sheet), `_powershell.py` (shared PowerShell runner).
+- **`backend/`** — core logic, no UI: `cleaner.py`, `privileges.py`, `tweaks/` (the reversible-tweaks subsystem), `profiles.py` (the 4 guided-flow levels), `drivers.py` (Windows Update and NVIDIA driver updates), `nvidia_driver.py`, `restore_point.py`, `hardware.py` (machine spec sheet), `_powershell.py` (shared PowerShell runner), `_system.py` (absolute paths to Windows tools).
 - **`frontend/`** — `rich`-based console UI: `cli.py` + `components/`.
-- **`tests/`** — pytest suite (`pytest -v`).
+- **`tests/`** — pytest suite. `pip install -r requirements-dev.txt`, then `pytest` and `ruff check .`.
 - **`docs/funcionamento.md`** — full architecture walkthrough in Portuguese, with diagrams.
 
 ## Design principles
 
-- 100% local — no login, no account, no license checks, no telemetry sent out, no online verification.
-- No downloads of drivers, executables, or third-party packages.
+- No login, no account, no license checks, no telemetry sent out.
 - Never touches game-specific folders.
-- Every system change this tool makes is reversible.
+- Every tweak is reversible. Deleted files and installed drivers are not: file cleanup can't be undone, and drivers rely on the restore point taken before a run.
+
+## Network and downloads
+
+Cleanup and tweaks work offline. Only the driver step, which needs your consent, uses the network: Windows Update through the Windows Update Agent, and NVIDIA's lookup service plus its official driver package (about 1 GB, checked for a valid NVIDIA signature before it runs).
 
 ## License
 

@@ -1,4 +1,3 @@
-import pytest
 
 from backend import profiles
 from backend.tweaks.base import TweakAlreadyApplied, TweakError

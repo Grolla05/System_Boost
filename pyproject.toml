@@ -1,9 +1,16 @@
 [project]
-name = "wincleaner"
+name = "system-boost"
 version = "0.1.0"
-description = "Minimalist CLI utility to clean Windows temporary files"
-requires-python = ">=3.9"
+description = "Windows CLI that cleans temporary files and applies reversible tweaks"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"frontend/cli.py" = ["F401"]  # re-exports for main.py

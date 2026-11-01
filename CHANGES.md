@@ -1,5 +1,15 @@
 # Changes
 
+## Qualidade, CI e documentação
+
+- Removidos `loading.py`, `retro_sprite.py`, `hardware_loading.py`, `typewriter.py` e o ramo de barra de progresso de drivers.
+- `update_all_drivers`: um caminho só de instalação para Windows Update e NVIDIA.
+- CI: `ruff`, cobertura, job de build do exe, `permissions: contents: read` e actions fixadas por SHA.
+- `build.py`: falha de assinatura agora encerra com erro.
+- Dependências separadas em `requirements.txt`, `requirements-dev.txt` e `requirements-build.txt`; `requires-python` alinhado em 3.11.
+- Telas usam cores do tema, então `--palette` vale para todas.
+- README e `docs/funcionamento.md` alinhados: 12 ajustes, downloads de drivers, limites da reversibilidade e nome System Boost.
+
 ## Bugs funcionais
 
 - `third_party.py`: pasta do usuário fica fora do filtro (`hp` não casa `Hpereira`) e `intel` não casa `IntelliJ`.

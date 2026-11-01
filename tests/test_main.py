@@ -101,20 +101,6 @@ def test_cmd_info_renders_machine_info(monkeypatch):
     assert shown == [sentinel]
 
 
-def test_driver_step_survives_unexpected_error(monkeypatch):
-    import main
-
-    def boom(*a, **k):
-        raise RuntimeError("kaboom")
-
-    monkeypatch.setattr(main, "show_driver_update", boom)
-    args = main.parse_args(["menu"])
-
-    summary = main._run_driver_step(args)
-
-    assert "kaboom" in summary
-
-
 def test_run_guarded_waits_for_key_on_crash(monkeypatch, capsys):
     import main
 
