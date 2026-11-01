@@ -94,8 +94,10 @@ def show_machine_info(info, wait=False):
 def show_level_menu():
     return display_level_menu(console)
 
-def show_level_summary(level_id, clean_paths, applicable_ids, skipped_ids, clean_commands=()):
-    return display_level_summary(console, level_id, clean_paths, applicable_ids, skipped_ids, clean_commands)
+def show_level_summary(level_id, clean_paths, applicable_ids, skipped_ids, clean_commands=(), machine_notes=()):
+    return display_level_summary(
+        console, level_id, clean_paths, applicable_ids, skipped_ids, clean_commands, machine_notes,
+    )
 
 def show_driver_confirm():
     return display_driver_confirm(console)

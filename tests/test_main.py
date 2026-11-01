@@ -372,9 +372,10 @@ def test_mission_log_stays_visible_above_the_summary(monkeypatch):
     seen = {}
     monkeypatch.setattr(main, "show_welcome", lambda skip_wait=False: None)
     monkeypatch.setattr(main, "show_level_menu", lambda: "leve")
-    monkeypatch.setattr(main.profiles, "resolve_clean_paths", lambda level: {})
-    monkeypatch.setattr(main.profiles, "resolve_tweak_plan", lambda level: ([], []))
-    monkeypatch.setattr(main.profiles, "apply_level_tweaks", lambda level, on_event=None: [])
+    monkeypatch.setattr(main.profiles, "resolve_clean_paths", lambda level, machine=None: {})
+    monkeypatch.setattr(main.profiles, "resolve_tweak_plan", lambda level, machine=None: ([], []))
+    monkeypatch.setattr(main.profiles, "apply_level_tweaks", lambda level, on_event=None, machine=None: [])
+    monkeypatch.setattr(main, "get_machine_info", lambda: None)
     monkeypatch.setattr(main, "_restore_point_step", lambda mlog: None)
     monkeypatch.setattr(main, "_clean_with_log", lambda *a, **k: ("0 B", 0))
 
@@ -391,3 +392,57 @@ def test_mission_log_stays_visible_above_the_summary(monkeypatch):
     main.cmd_menu(main.parse_args(["menu", "-y"]))
 
     assert seen["clear"] is False
+
+
+def _run_level_flow(monkeypatch, args, machine):
+    import main
+
+    seen = {"menu": 0}
+
+    def fake_menu():
+        seen["menu"] += 1
+        return "leve"
+
+    monkeypatch.setattr(main, "show_welcome", lambda skip_wait=False: None)
+    monkeypatch.setattr(main, "show_level_menu", fake_menu)
+    monkeypatch.setattr(main, "get_machine_info", lambda: machine)
+    monkeypatch.setattr(main, "_restore_point_step", lambda mlog: None)
+    monkeypatch.setattr(main, "_clean_with_log", lambda *a, **k: ("0 B", 0))
+    monkeypatch.setattr(main.profiles, "resolve_clean_paths", lambda level, machine=None: {})
+    monkeypatch.setattr(main.profiles, "resolve_tweak_plan", lambda level, machine=None: ([], []))
+    monkeypatch.setattr(main, "show_level_completion", lambda *a, **k: "exit")
+
+    def fake_apply(level, on_event=None, machine=None):
+        seen.update(level=level, machine=machine)
+        return []
+
+    monkeypatch.setattr(main.profiles, "apply_level_tweaks", fake_apply)
+
+    class Log:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(main, "show_mission_log", lambda title: Log())
+    main.cmd_menu(main.parse_args(args))
+    return seen
+
+
+def test_level_flag_runs_that_level_without_the_menu(monkeypatch):
+    seen = _run_level_flow(monkeypatch, ["menu", "-y", "--level", "alta"], None)
+
+    assert seen["menu"] == 0
+    assert seen["level"] == "alta"
+
+
+def test_level_flag_rejects_unknown_level():
+    with pytest.raises(SystemExit):
+        parse_args(["menu", "--level", "turbo"])
+
+
+def test_machine_reaches_the_tweak_step(monkeypatch):
+    sentinel = object()
+
+    assert _run_level_flow(monkeypatch, ["menu", "-y"], sentinel)["machine"] is sentinel

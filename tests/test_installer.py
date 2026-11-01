@@ -119,3 +119,13 @@ def test_installer_removes_the_old_per_user_copy():
     script = (ROOT / "installer.iss").read_text(encoding="utf-8")
 
     assert r"{localappdata}\Programs\System Boost\unins000.exe" in script.split("[Code]")[1]
+
+
+def test_uninstaller_offers_undo_before_removing_files():
+    script = (ROOT / "installer.iss").read_text(encoding="utf-8")
+    code = script[script.index("CurUninstallStepChanged"):]
+
+    assert "usUninstall" in code
+    assert "not UninstallSilent" in code
+    assert "tweaks_state.json" in code
+    assert "'undo --all'" in code

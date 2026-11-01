@@ -50,3 +50,18 @@ begin
       Exec(OldUninstaller, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 end;
+
+// Runs before the files go away: the exe is what knows how to restore the saved values.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ResultCode: Integer;
+begin
+  if (CurUninstallStep = usUninstall) and not UninstallSilent
+    and FileExists(ExpandConstant('{localappdata}\WinCleaner\tweaks_state.json'))
+    and (MsgBox('Desfazer os ajustes aplicados pelo System Boost antes de remover?', mbConfirmation, MB_YESNO) = IDYES) then
+  begin
+    if not Exec(ExpandConstant('{app}\{#AppExeName}'), 'undo --all', '', SW_SHOW, ewWaitUntilTerminated, ResultCode)
+      or (ResultCode <> 0) then
+      MsgBox('Alguns ajustes não foram desfeitos. Depois de remover, restaure-os pelas configurações do Windows.', mbError, MB_OK);
+  end;
+end;

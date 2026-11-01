@@ -260,12 +260,13 @@ def _patch_flow(monkeypatch, choices, applied=None, confirm=True, admin=True):
     monkeypatch.setattr(main, "create_restore_point", lambda: (True, "ok"))
     monkeypatch.setattr(main, "is_admin", lambda: admin)
     monkeypatch.setattr(main, "list_applied", lambda: list(applied or []))
+    monkeypatch.setattr(main, "get_machine_info", lambda: None)
     monkeypatch.setattr(main, "show_undo_confirm", lambda a, admin: calls["confirm"].append((a, admin)) or confirm)
     monkeypatch.setattr(main, "show_undo_results", lambda r, wait=True: calls["results"].append((r, wait)))
     monkeypatch.setattr(main, "show_undo_empty", lambda wait=True: calls["empty"].append(wait))
     monkeypatch.setattr(main, "show_tweak_error", lambda msg: calls["errors"].append(msg))
-    monkeypatch.setattr(main.profiles, "resolve_clean_paths", lambda level: {})
-    monkeypatch.setattr(main.profiles, "resolve_tweak_plan", lambda level: ([], []))
+    monkeypatch.setattr(main.profiles, "resolve_clean_paths", lambda level, machine=None: {})
+    monkeypatch.setattr(main.profiles, "resolve_tweak_plan", lambda level, machine=None: ([], []))
     monkeypatch.setattr(
         main, "show_level_summary",
         lambda level_id, *a, **k: calls["summary"].append(level_id) or False,
@@ -382,3 +383,12 @@ def test_summary_warns_about_prefetch():
         level_menu.display_level_summary(console, "alta", {"Prefetch": "x"}, [], [])
 
     assert "Prefetch será limpo" in out.getvalue()
+
+
+def test_summary_lists_what_the_machine_leaves_out():
+    out, console = _console()
+
+    with patch("rich.prompt.Confirm.ask", return_value=True):
+        level_menu.display_level_summary(console, "leve", {}, [], [], machine_notes=["SysMain: disco HDD"])
+
+    assert "SysMain: disco HDD" in out.getvalue()

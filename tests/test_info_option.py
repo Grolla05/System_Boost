@@ -130,7 +130,7 @@ def _patch_menu_flow(monkeypatch, choices, proceed=False):
 
     shown, summaries = [], []
     fetches = []
-    sentinel = object()
+    sentinel = MachineInfo()
 
     monkeypatch.setattr(main, "show_welcome", lambda skip_wait=False: None)
     monkeypatch.setattr(main, "show_level_menu", lambda it=iter(choices): next(it))
@@ -138,8 +138,8 @@ def _patch_menu_flow(monkeypatch, choices, proceed=False):
     monkeypatch.setattr(main, "create_restore_point", lambda: (True, "ok"))
     monkeypatch.setattr(main, "get_machine_info", lambda: fetches.append(1) or sentinel)
     monkeypatch.setattr(main, "show_machine_info", lambda info, wait=False: shown.append((info, wait)))
-    monkeypatch.setattr(main.profiles, "resolve_clean_paths", lambda level: {})
-    monkeypatch.setattr(main.profiles, "resolve_tweak_plan", lambda level: ([], []))
+    monkeypatch.setattr(main.profiles, "resolve_clean_paths", lambda level, machine=None: {})
+    monkeypatch.setattr(main.profiles, "resolve_tweak_plan", lambda level, machine=None: ([], []))
     monkeypatch.setattr(
         main, "show_level_summary",
         lambda level_id, *a, **k: summaries.append(level_id) or proceed,
@@ -169,11 +169,11 @@ def test_cmd_menu_reads_hardware_only_once_across_repeated_views(monkeypatch):
     assert len(fetches) == 1
 
 
-def test_cmd_menu_without_info_never_reads_hardware(monkeypatch):
+def test_cmd_menu_reads_hardware_for_a_level_without_showing_the_sheet(monkeypatch):
     main, shown, summaries, fetches, sentinel = _patch_menu_flow(monkeypatch, ["leve"])
 
     main.cmd_menu(main.parse_args(["menu"]))
 
-    assert fetches == []
+    assert len(fetches) == 1
     assert shown == []
 

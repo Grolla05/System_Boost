@@ -201,7 +201,9 @@ def display_level_menu(console: Console):
             return EXIT_CHOICE
 
 
-def display_level_summary(console: Console, level_id, clean_paths, applicable_ids, skipped_ids, clean_commands=()):
+def display_level_summary(
+    console: Console, level_id, clean_paths, applicable_ids, skipped_ids, clean_commands=(), machine_notes=(),
+):
     """Shows the retro pre-scan disk breakdown and mission briefing before running."""
     from backend import cleaner
     from .disk_breakdown import measure_paths_sizes, create_disk_breakdown_panel
@@ -259,6 +261,11 @@ def display_level_summary(console: Console, level_id, clean_paths, applicable_id
         lines.append("[warning]Pulados (requer Administrador):[/warning]")
         for tweak_id in skipped_ids:
             lines.append(f"  [warning]• {tweaks_catalog.get_tweak(tweak_id).label}[/warning]")
+
+    if machine_notes:
+        lines.append("")
+        lines.append("[accent]Fora deste nível nesta máquina:[/accent]")
+        lines += [f"  [dim]• {escape(note)}[/dim]" for note in machine_notes]
 
     briefing_panel = Panel("\n".join(lines), box=box.DOUBLE, border_style="accent", expand=False, padding=(1, 3))
     console.print(briefing_panel)
