@@ -14,7 +14,7 @@ from backend._system import system_exe
 from backend.logger import get_logger
 
 from . import third_party
-from .base import Tweak
+from .base import Tweak, TweakPartialUndo
 
 log = get_logger("tweaks.third_party_services")
 
@@ -128,12 +128,16 @@ class ThirdPartyServicesTweak(Tweak):
 
     def undo(self, previous_value):
         """Restores each service's original start type and starts it again."""
+        failed = []
         for service in previous_value or []:
             name = service["name"]
             try:
                 set_start_type(name, service["start_type"])
             except OSError as exc:
                 log.warning("serviço '%s': não foi possível restaurar: %s", name, exc)
+                failed.append(service)
                 continue
             start_service(name)
+        if failed:
+            raise TweakPartialUndo(failed)
         return previous_value

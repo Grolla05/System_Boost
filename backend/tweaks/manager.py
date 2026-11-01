@@ -4,7 +4,7 @@ from backend.privileges import is_admin
 
 from . import catalog
 from . import state_store
-from .base import TweakAlreadyApplied, TweakError
+from .base import TweakAlreadyApplied, TweakError, TweakPartialUndo
 
 log = get_logger("tweaks.manager")
 
@@ -31,7 +31,14 @@ def apply_tweak(tweak_id, state_path=None):
         )
     previous_value = tweak.get_current_value()
     log.debug("apply '%s': valor atual=%r", tweak_id, previous_value)
-    applied_value = tweak.apply()
+    state_store.save_applied(
+        tweak_id, previous_value, None, tweak.requires_admin, path=state_path, status="pending",
+    )
+    try:
+        applied_value = tweak.apply()
+    except TweakError:
+        state_store.clear_applied(tweak_id, path=state_path)
+        raise
     log.debug("apply '%s': valor aplicado=%r", tweak_id, applied_value)
     state_store.save_applied(tweak_id, previous_value, applied_value, tweak.requires_admin, path=state_path)
     log.info("apply '%s': concluído (%r -> %r)", tweak_id, previous_value, applied_value)
@@ -47,7 +54,12 @@ def undo_tweak(tweak_id, state_path=None):
     if record is None:
         log.info("undo '%s': não aplicado, nada a fazer", tweak_id)
         raise TweakError(f"'{tweak_id}' não está aplicado — nada para desfazer.")
-    tweak.undo(record["previous_value"])
+    try:
+        tweak.undo(record["previous_value"])
+    except TweakPartialUndo as exc:
+        log.warning("undo '%s': parcial, %d item(ns) pendente(s)", tweak_id, len(exc.remaining))
+        state_store.update_previous(tweak_id, exc.remaining, path=state_path)
+        raise
     state_store.clear_applied(tweak_id, path=state_path)
     log.info("undo '%s': concluído (restaurado %r)", tweak_id, record["previous_value"])
     return record["previous_value"]
@@ -63,6 +75,9 @@ def undo_all(state_path=None):
             results.append((tweak_id, True, None))
         except TweakError as exc:
             results.append((tweak_id, False, str(exc)))
+        except Exception as exc:
+            log.exception("undo '%s': erro inesperado", tweak_id)
+            results.append((tweak_id, False, f"erro inesperado: {exc}"))
     return results
 
 

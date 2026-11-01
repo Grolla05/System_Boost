@@ -6,7 +6,7 @@ except ImportError:  # pragma: no cover - non-Windows dev machine
 
 from backend.logger import get_logger
 
-from .base import Tweak
+from .base import Tweak, TweakPartialUndo
 
 log = get_logger("tweaks.recommendations_offers")
 
@@ -106,9 +106,13 @@ class RecommendationsOffersTweak(Tweak):
 
     def undo(self, previous_value):
         """Restores each value (deleting the ones that didn't exist before)."""
+        failed = []
         for item in previous_value or []:
             try:
                 _write(item["path"], item["name"], item["previous"])
             except OSError as exc:
                 log.warning("'%s': não foi possível restaurar: %s", item["name"], exc)
+                failed.append(item)
+        if failed:
+            raise TweakPartialUndo(failed)
         return previous_value

@@ -6,6 +6,7 @@ from backend.tweaks.catalog import get_tweak
 from backend.cleaner import (
     ADMIN_ONLY_PATHS, CLEAN_RULES, COMMAND_CLEANUPS, get_temp_paths, clean_directory, format_size, run_command_cleanup,
 )
+from backend.tweaks.state_store import StateCorruptError
 from backend.tweaks import list_status, list_applied, apply_tweak, undo_tweak, undo_all, TweakError
 from backend import profiles
 from backend.logger import get_logger, setup_logging
@@ -376,7 +377,13 @@ def main():
     if getattr(args, "no_sound", False):
         set_sound_enabled(False)
     log.info("comando='%s' args=%s", args.command, vars(args))
-    _DISPATCH[args.command](args)
+    try:
+        _DISPATCH[args.command](args)
+    except StateCorruptError as exc:
+        log.error("estado dos ajustes: %s", exc)
+        show_tweak_error(str(exc))
+        _wait_key_after_crash()
+        sys.exit(1)
 
 
 def _wait_key_after_crash():

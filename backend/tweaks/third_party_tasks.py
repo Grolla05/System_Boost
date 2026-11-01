@@ -7,7 +7,7 @@ from backend._system import system_exe
 from backend.logger import get_logger
 
 from . import third_party
-from .base import Tweak
+from .base import Tweak, TweakPartialUndo
 
 log = get_logger("tweaks.third_party_tasks")
 
@@ -84,9 +84,13 @@ class ThirdPartyTasksTweak(Tweak):
 
     def undo(self, previous_value):
         """Re-enables each task that apply() disabled."""
+        failed = []
         for task in previous_value or []:
             try:
                 set_task_enabled(task["task"], True)
             except OSError as exc:
                 log.warning("tarefa '%s': não foi possível reativar: %s", task["task"], exc)
+                failed.append(task)
+        if failed:
+            raise TweakPartialUndo(failed)
         return previous_value

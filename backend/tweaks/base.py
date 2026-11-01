@@ -10,6 +10,15 @@ class TweakAlreadyApplied(TweakError):
     """Raised when apply is requested for a tweak whose applied state is already recorded."""
 
 
+class TweakPartialUndo(TweakError):
+    """Raised by undo() when some items were not restored; remaining holds them for a later retry."""
+
+    def __init__(self, remaining):
+        self.remaining = remaining
+        names = ", ".join(str(item.get("name") or item.get("task") or item) for item in remaining)
+        super().__init__(f"{len(remaining)} item(ns) não restaurado(s): {names}")
+
+
 class Tweak(ABC):
     """Common interface every reversible Windows tweak must implement."""
 

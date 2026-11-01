@@ -1,7 +1,7 @@
 import pytest
 
 from backend.tweaks import manager
-from backend.tweaks.base import Tweak, TweakAlreadyApplied, TweakError
+from backend.tweaks.base import Tweak, TweakAlreadyApplied, TweakError, TweakPartialUndo
 
 
 class StubTweak(Tweak):
@@ -215,3 +215,89 @@ def test_list_applied_skips_ids_missing_from_the_catalog(monkeypatch, tmp_path):
     _patch_catalog(monkeypatch, {})  # tweak removed from the catalog in a later version
 
     assert manager.list_applied(state_path=state_path) == []
+
+
+# --- crash safety and partial undo --------------------------------------------
+
+def test_record_is_pending_while_apply_runs(monkeypatch, tmp_path):
+    state_path = tmp_path / "state.json"
+    tweak = StubTweak("t1", current_value="before")
+    seen = {}
+    tweak.apply = lambda: seen.update(manager.state_store.get_applied("t1", path=state_path)) or "after"
+    _patch_catalog(monkeypatch, {"t1": tweak})
+
+    manager.apply_tweak("t1", state_path=state_path)
+
+    assert seen["status"] == "pending"
+    assert seen["previous_value"] == "before"
+    assert manager.state_store.get_applied("t1", path=state_path)["status"] == "applied"
+
+
+def test_crash_during_apply_stays_listed_for_undo(monkeypatch, tmp_path):
+    state_path = tmp_path / "state.json"
+    tweak = StubTweak("t1", current_value="before")
+
+    def crash():
+        raise RuntimeError("queda")
+
+    tweak.apply = crash
+    _patch_catalog(monkeypatch, {"t1": tweak})
+
+    with pytest.raises(RuntimeError):
+        manager.apply_tweak("t1", state_path=state_path)
+
+    assert [t.id for t, _ in manager.list_applied(state_path=state_path)] == ["t1"]
+    manager.undo_tweak("t1", state_path=state_path)
+    assert tweak.calls[-1] == ("undo", "before")
+
+
+def test_failed_apply_leaves_no_record(monkeypatch, tmp_path):
+    state_path = tmp_path / "state.json"
+    tweak = StubTweak("t1")
+
+    def fail():
+        raise TweakError("não aplicou")
+
+    tweak.apply = fail
+    _patch_catalog(monkeypatch, {"t1": tweak})
+
+    with pytest.raises(TweakError):
+        manager.apply_tweak("t1", state_path=state_path)
+
+    assert manager.state_store.get_applied("t1", path=state_path) is None
+
+
+def test_partial_undo_keeps_only_what_is_left(monkeypatch, tmp_path):
+    state_path = tmp_path / "state.json"
+    tweak = StubTweak("t1", current_value=[{"name": "A"}, {"name": "B"}])
+
+    def partial(previous):
+        raise TweakPartialUndo([{"name": "B"}])
+
+    tweak.undo = partial
+    _patch_catalog(monkeypatch, {"t1": tweak})
+    manager.apply_tweak("t1", state_path=state_path)
+
+    results = manager.undo_all(state_path=state_path)
+
+    assert results[0][:2] == ("t1", False)
+    assert "B" in results[0][2]
+    assert manager.state_store.get_applied("t1", path=state_path)["previous_value"] == [{"name": "B"}]
+
+
+def test_undo_all_survives_unexpected_exception(monkeypatch, tmp_path):
+    state_path = tmp_path / "state.json"
+    t1, t2 = StubTweak("t1"), StubTweak("t2")
+
+    def boom(previous):
+        raise ValueError("inesperado")
+
+    t2.undo = boom
+    _patch_catalog(monkeypatch, {"t1": t1, "t2": t2})
+    manager.apply_tweak("t1", state_path=state_path)
+    manager.apply_tweak("t2", state_path=state_path)
+
+    results = manager.undo_all(state_path=state_path)
+
+    assert {tid: ok for tid, ok, _ in results} == {"t1": True, "t2": False}
+    assert manager.state_store.get_applied("t2", path=state_path) is not None
