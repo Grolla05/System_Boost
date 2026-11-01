@@ -1,5 +1,11 @@
 # Changes
 
+## Consentimento e ponto de restauração
+
+- `level_menu.py`: ESC/Q retorna `EXIT_CHOICE` e sai sem executar.
+- `main.py`: só `--dry-run` pode omitir o subcomando; `clean` pede confirmação (Prefetch avisado ali, visível); drivers exigem `--drivers` ou sim na pergunta, e `-y` sozinho não instala.
+- `backend/restore_point.py`: `Checkpoint-Computer` antes de stage e `clean`; falha vira aviso no mission log.
+
 ## Lixeira esvaziada já no Stage 1
 
 - `backend/profiles.py`: `recycle-bin` passa de Mediana para Leve (Stage 2+ herdam). Ordem em Mediana: Lixeira, npm, uv.

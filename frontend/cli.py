@@ -6,7 +6,10 @@ from .components.loading import run_cleanup_with_loading
 from .components.completion import display_completion_screen
 from .components.tweak_list import display_tweak_list
 from .components.tweak_result import display_tweak_success, display_tweak_error, display_undo_all_results
-from .components.level_menu import display_level_menu, display_level_summary, INFO_CHOICE, UNDO_CHOICE
+from .components.level_menu import (
+    display_clean_confirm, display_driver_confirm, display_level_menu, display_level_summary,
+    EXIT_CHOICE, INFO_CHOICE, UNDO_CHOICE,
+)
 from .components.undo_menu import display_undo_confirm, display_undo_empty, display_undo_results
 from .components.level_completion import display_level_completion
 from .components.driver_progress import run_driver_update_with_progress, format_driver_summary
@@ -97,6 +100,12 @@ def show_level_menu():
 
 def show_level_summary(level_id, clean_paths, applicable_ids, skipped_ids, clean_commands=()):
     return display_level_summary(console, level_id, clean_paths, applicable_ids, skipped_ids, clean_commands)
+
+def show_driver_confirm():
+    return display_driver_confirm(console)
+
+def show_clean_confirm(paths):
+    return display_clean_confirm(console, paths)
 
 def show_driver_update(update_func, dry_run=False):
     return run_driver_update_with_progress(console, update_func, dry_run=dry_run)

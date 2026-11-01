@@ -134,6 +134,8 @@ def _patch_menu_flow(monkeypatch, choices, proceed=False):
 
     monkeypatch.setattr(main, "show_welcome", lambda skip_wait=False: None)
     monkeypatch.setattr(main, "show_level_menu", lambda it=iter(choices): next(it))
+    monkeypatch.setattr(main, "show_driver_confirm", lambda: False)
+    monkeypatch.setattr(main, "create_restore_point", lambda: (True, "ok"))
     monkeypatch.setattr(main, "get_machine_info", lambda: fetches.append(1) or sentinel)
     monkeypatch.setattr(main, "show_machine_info", lambda info, wait=False: shown.append((info, wait)))
     monkeypatch.setattr(main.profiles, "resolve_clean_paths", lambda level: {})
