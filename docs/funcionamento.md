@@ -320,12 +320,18 @@ Na tela de conclusão (passo 4), **Enter** (ou qualquer tecla além de ESC) ence
 
 ### Os 4 níveis (`backend/profiles.py`)
 
+`menu --level <id>` pula o menu; com `-y`, roda sem interação.
+
 | Nível | Pastas limpas | Ajustes aplicados |
 |---|---|---|
 | Leve | User Temp, Lixeira | `startup_apps`, `third_party_services`, `third_party_tasks` |
 | Mediana | + System Temp, SquirrelTemp, Gradle/Go/User Cache, npm/uv cache | + `power_plan`, `recommendations_offers`, `mouse_acceleration`, `hibernation` |
 | Alta | + Prefetch | + `visual_effects`, `indexing` |
 | Extrema | (mesmas de Alta) | + `telemetry`, `sysmain`, `compat_appraiser` |
+
+**Adaptação à máquina**: a ficha de `get_machine_info()` vai para `resolve_tweak_plan`, `resolve_clean_paths` e `apply_level_tweaks`. Em HDD ficam fora `sysmain` e a limpeza do Prefetch; em notebook, `hibernation` e `power_plan`. Hardware desconhecido não exclui nada, e `apply <id>` continua aplicando sob pedido.
+
+**Ajustes agregados** (`startup_apps`, `third_party_services`, `third_party_tasks`): reaplicar trata só os itens novos e os soma ao registro, gravando antes de `apply()`. Item já registrado mantém o valor original.
 
 Cada nível é uma lista declarativa de pastas + comandos de limpeza (`clean_commands`: `npm-cache`, `uv-cache`, `recycle-bin`, executados por `cleaner.run_command_cleanup()`, que ignora ferramenta não instalada e mede o ganho antes/depois) + ids de ajustes em `profiles.LEVELS`; o Stage 2 (Mediana) inclui a "Lista C" e o ajuste `hibernation` (remove o hiberfil.sys; perde hibernação/inicialização rápida); `resolve_clean_paths()` reaproveita `cleaner.get_temp_paths()` e o mesmo filtro por admin que `cmd_clean` já tinha, e `apply_level_tweaks()` reaproveita `tweaks.manager.apply_tweak()` ajuste por ajuste.
 

@@ -59,6 +59,7 @@ def parse_args(argv=None):
 
     menu_parser = subparsers.add_parser("menu", help="Fluxo guiado: escolha um nível de otimização")
     menu_parser.add_argument("-y", "--yes", action="store_true", help="Pula confirmações (uso automatizado)")
+    menu_parser.add_argument("--level", choices=profiles.LEVEL_ORDER, help="Roda este nível sem abrir o menu")
     menu_parser.add_argument("--drivers", action="store_true", help="Atualiza drivers ao final, sem perguntar")
     menu_parser.add_argument("--no-drivers", action="store_true", help="Não atualiza drivers ao final")
     menu_parser.add_argument("--no-sound", action="store_true", help="Desativa efeitos sonoros retrô 8-bit")
@@ -240,28 +241,37 @@ def cmd_menu(args):
 
     machine_info = None  # read lazily, once: the PowerShell/CIM query takes a couple of seconds
 
+    def read_machine():
+        nonlocal machine_info
+        if machine_info is None:
+            log.info("menu: lendo ficha da máquina")
+            with console.status("[accent]Lendo hardware...[/accent]"):
+                machine_info = get_machine_info()
+        return machine_info
+
+    preset_level = args.level
     while True:
-        level_id = show_level_menu()
+        level_id, preset_level = preset_level or show_level_menu(), None
         if level_id == EXIT_CHOICE:
             log.info("menu: usuário saiu")
             return
         if level_id == INFO_CHOICE:
-            if machine_info is None:
-                log.info("menu: lendo ficha da máquina")
-                with console.status("[accent]Lendo hardware...[/accent]"):
-                    machine_info = get_machine_info()
-            show_machine_info(machine_info, wait=True)
+            show_machine_info(read_machine(), wait=True)
             continue
         if level_id == UNDO_CHOICE:
             _run_undo_flow(args)
             continue
         log.info("menu: nível escolhido='%s'", level_id)
-        clean_paths = profiles.resolve_clean_paths(level_id)
+        machine = read_machine()
+        clean_paths = profiles.resolve_clean_paths(level_id, machine)
         clean_commands = profiles.LEVELS[level_id]["clean_commands"]
-        applicable_ids, skipped_ids = profiles.resolve_tweak_plan(level_id)
+        applicable_ids, skipped_ids = profiles.resolve_tweak_plan(level_id, machine)
 
         if not args.yes:
-            proceed = show_level_summary(level_id, clean_paths, applicable_ids, skipped_ids, clean_commands)
+            proceed = show_level_summary(
+                level_id, clean_paths, applicable_ids, skipped_ids, clean_commands,
+                machine_notes=profiles.machine_notes(level_id, machine),
+            )
             if not proceed:
                 log.info("menu: usuário cancelou na confirmação")
                 return
@@ -274,7 +284,7 @@ def cmd_menu(args):
             total_formatted, total_bytes = _clean_with_log(mlog, clean_paths, commands=clean_commands)
             log.info("etapa limpeza: concluída, total liberado=%s", total_formatted)
             log.info("etapa ajustes: iniciando")
-            tweak_results = profiles.apply_level_tweaks(level_id, on_event=_tweak_event_handler(mlog))
+            tweak_results = profiles.apply_level_tweaks(level_id, on_event=_tweak_event_handler(mlog), machine=machine)
             log.info("etapa ajustes: resultados=%s", tweak_results)
             driver_summary = _run_driver_step(args, mlog) if drivers else None
 

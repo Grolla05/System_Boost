@@ -1,5 +1,6 @@
 
 from backend import profiles
+from backend.hardware import MachineInfo
 from backend.tweaks.base import TweakAlreadyApplied, TweakError
 
 
@@ -340,3 +341,44 @@ def test_unexpected_error_does_not_stop_the_level(monkeypatch):
     assert results[0][1] is False
     assert "inesperado" in results[0][2]
     assert all(r[1] is True for r in results[1:])
+
+
+def test_hdd_keeps_sysmain_and_prefetch():
+    machine = MachineInfo(disk_type="HDD", form_factor="Desktop")
+
+    assert profiles.machine_skips(profiles.LEVELS["extrema"]["tweak_ids"], machine).keys() == {"sysmain"}
+    assert any("Prefetch" in note for note in profiles.machine_notes("extrema", machine))
+
+
+def test_notebook_keeps_hibernation_and_power_plan():
+    machine = MachineInfo(disk_type="SSD", form_factor="Notebook")
+
+    assert profiles.machine_skips(profiles.LEVELS["mediana"]["tweak_ids"], machine).keys() == {
+        "hibernation", "power_plan",
+    }
+
+
+def test_unknown_hardware_skips_nothing():
+    assert profiles.machine_skips(profiles.LEVELS["extrema"]["tweak_ids"], MachineInfo()) == {}
+    assert profiles.machine_skips(profiles.LEVELS["extrema"]["tweak_ids"], None) == {}
+    assert profiles.machine_notes("extrema", MachineInfo()) == []
+
+
+def test_resolve_clean_paths_drops_prefetch_on_hdd(monkeypatch):
+    monkeypatch.setattr(profiles.cleaner, "get_temp_paths", lambda: dict(_ALL_TEMP_PATHS))
+    monkeypatch.setattr(profiles, "is_admin", lambda: True)
+
+    assert "Prefetch" not in profiles.resolve_clean_paths("alta", MachineInfo(disk_type="HDD"))
+    assert "Prefetch" in profiles.resolve_clean_paths("alta", MachineInfo(disk_type="SSD"))
+
+
+def test_level_reports_unsuitable_tweak_as_skipped_with_reason(monkeypatch):
+    monkeypatch.setitem(profiles.LEVELS, "x", {"tweak_ids": ("sysmain",), "clean_paths": ()})
+    monkeypatch.setattr(profiles, "is_admin", lambda: True)
+    applied = []
+    monkeypatch.setattr(profiles.tweaks_manager, "apply_tweak", lambda *a, **k: applied.append(a))
+
+    results = profiles.apply_level_tweaks("x", machine=MachineInfo(disk_type="HDD"))
+
+    assert applied == []
+    assert results == [("sysmain", None, profiles.machine_skips(("sysmain",), MachineInfo(disk_type="HDD"))["sysmain"])]

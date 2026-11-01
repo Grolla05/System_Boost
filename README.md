@@ -44,10 +44,13 @@ python installer.py
 
 ```bash
 python main.py          # welcome -> pick a level (1-4) -> confirm -> run -> completion
-python main.py menu -y  # same flow, skips confirmations (scripted/unattended use)
+python main.py menu -y  # same flow, skips confirmations
+python main.py menu -y --level mediana  # unattended: runs that level without the menu
 ```
 
 Pick a level and the tool shows exactly what it's about to clean and which tweaks it'll apply *before* touching anything. Tweaks that need Administrator are shown as "pulados" (skipped) rather than failing the whole run when the terminal isn't elevated.
+
+Levels also adapt to the machine: an HDD keeps SysMain and Prefetch, and a notebook keeps hibernation and its power plan. The briefing lists what was left out, and `apply <tweak_id>` still applies any tweak on request. Running a level again also handles startup apps, services and tasks installed since the last run, and `undo` restores those too.
 
 ### Driver updates
 

@@ -20,13 +20,41 @@ def _require_admin_if_needed(tweak):
         )
 
 
+def _item_key(item):
+    return item.get("scope"), item.get("name"), item.get("task")
+
+
+def _extend_applied(tweak, record, state_path):
+    """Runs an aggregate tweak again for items that appeared since it was applied; returns what changed."""
+    known = {_item_key(item) for item in record["previous_value"] or []}
+    new_items = [item for item in tweak.get_current_value() if _item_key(item) not in known]
+    if not new_items:
+        raise TweakAlreadyApplied(
+            f"'{tweak.id}' já está aplicado. Rode `{cli_command()} undo {tweak.id}` para desfazer."
+        )
+    previous_value = (record["previous_value"] or []) + new_items
+    state_store.update_previous(tweak.id, previous_value, path=state_path)
+    changed = tweak.apply()
+    state_store.save_applied(
+        tweak.id, previous_value, (record["applied_value"] or []) + changed, tweak.requires_admin, path=state_path,
+    )
+    log.info("apply '%s': %d item(ns) novo(s)", tweak.id, len(changed))
+    return changed
+
+
 def apply_tweak(tweak_id, state_path=None):
-    """Applies tweak_id after checking admin and saving its current value for undo."""
+    """Applies tweak_id after checking admin and saving its current value for undo.
+
+    An aggregate tweak already applied is run again for new items; the others raise TweakAlreadyApplied.
+    """
     log.info("apply '%s': iniciando", tweak_id)
     tweak = catalog.get_tweak(tweak_id)
     _require_admin_if_needed(tweak)
-    if state_store.get_applied(tweak_id, path=state_path) is not None:
+    record = state_store.get_applied(tweak_id, path=state_path)
+    if record is not None:
         log.info("apply '%s': já consta como aplicado no state file", tweak_id)
+        if tweak.previews_items:
+            return _extend_applied(tweak, record, state_path)
         raise TweakAlreadyApplied(
             f"'{tweak_id}' já está aplicado. Rode `{cli_command()} undo {tweak_id}` para desfazer."
         )

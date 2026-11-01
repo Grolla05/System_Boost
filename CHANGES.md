@@ -1,5 +1,12 @@
 # Changes
 
+## Ajustes por máquina
+
+- `profiles.py`: níveis deixam fora `sysmain` e Prefetch em HDD, `hibernation` e `power_plan` em notebook; briefing lista o que ficou fora.
+- `manager.py`: reaplicar ajuste agregado trata só itens novos e os inclui no undo.
+- `menu --level <id>` roda o nível sem abrir o menu.
+- `installer.iss`: desinstalador oferece `undo --all` antes de remover os arquivos.
+
 ## Qualidade, CI e documentação
 
 - Removidos `loading.py`, `retro_sprite.py`, `hardware_loading.py`, `typewriter.py` e o ramo de barra de progresso de drivers.

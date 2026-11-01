@@ -4,7 +4,6 @@ from .logger import get_logger
 from .privileges import is_admin
 from .tweaks import manager as tweaks_manager
 from .tweaks import catalog as tweaks_catalog
-from .tweaks import state_store
 from .tweaks.base import TweakAlreadyApplied, TweakError
 
 log = get_logger("profiles")
@@ -61,24 +60,62 @@ LEVELS["extrema"] = _extend(
 
 LEVEL_ORDER = ("leve", "mediana", "alta", "extrema")
 
+_HDD_REASON = "disco HDD se beneficia"
+_NOTEBOOK_REASON = "notebook"
+# tweak id -> (does it hurt on this machine?, why). An unknown disk or form factor (None) never matches.
+_UNSUITABLE = {
+    "sysmain": (lambda m: m.disk_type == "HDD", f"{_HDD_REASON} do SysMain"),
+    "hibernation": (lambda m: m.form_factor == "Notebook", f"{_NOTEBOOK_REASON} usa hibernação"),
+    "power_plan": (lambda m: m.form_factor == "Notebook", f"{_NOTEBOOK_REASON} gastaria mais bateria"),
+}
 
-def resolve_clean_paths(level_id):
-    """Returns {name: path} for the level's clean_paths, filtered to admin scope and to what exists."""
+
+def machine_skips(tweak_ids, machine):
+    """Returns {tweak_id: reason} for tweaks a level leaves out on this machine."""
+    if machine is None:
+        return {}
+    return {
+        tweak_id: _UNSUITABLE[tweak_id][1]
+        for tweak_id in tweak_ids
+        if tweak_id in _UNSUITABLE and _UNSUITABLE[tweak_id][0](machine)
+    }
+
+
+def _skip_prefetch(level_id, machine):
+    return machine is not None and machine.disk_type == "HDD" and "Prefetch" in LEVELS[level_id]["clean_paths"]
+
+
+def machine_notes(level_id, machine):
+    """Lines for the briefing: what this level leaves out on this machine, and why."""
+    skips = machine_skips(LEVELS[level_id]["tweak_ids"], machine)
+    notes = [f"{tweaks_catalog.get_tweak(tweak_id).label}: {reason}" for tweak_id, reason in skips.items()]
+    if _skip_prefetch(level_id, machine):
+        notes.append(f"Limpeza do Prefetch: {_HDD_REASON} dele no boot")
+    return notes
+
+
+def resolve_clean_paths(level_id, machine=None):
+    """Returns {name: path} for the level's clean_paths, filtered to admin scope, what exists and the machine."""
     all_paths = cleaner.get_temp_paths()
     admin = is_admin()
     allowed = all_paths if admin else {k: v for k, v in all_paths.items() if k not in cleaner.ADMIN_ONLY_PATHS}
     level = LEVELS[level_id]
     resolved = {k: v for k, v in allowed.items() if k in level["clean_paths"]}
+    if _skip_prefetch(level_id, machine):
+        resolved.pop("Prefetch", None)
     log.info("nível '%s': admin=%s, pastas de limpeza=%s", level_id, admin, resolved)
     return resolved
 
 
-def resolve_tweak_plan(level_id):
-    """Returns (applicable_ids, skipped_ids) for the level given the current elevation."""
+def resolve_tweak_plan(level_id, machine=None):
+    """Returns (applicable_ids, skipped_ids) for the level given the elevation; unsuitable tweaks are in neither."""
     admin = is_admin()
     applicable = []
     skipped = []
+    unsuitable = machine_skips(LEVELS[level_id]["tweak_ids"], machine)
     for tweak_id in LEVELS[level_id]["tweak_ids"]:
+        if tweak_id in unsuitable:
+            continue
         tweak = tweaks_catalog.get_tweak(tweak_id)
         if tweak.requires_admin and not admin:
             skipped.append(tweak_id)
@@ -98,26 +135,25 @@ def _item_label(item):
     return str(item)
 
 
-def preview_tweak_items(tweak_ids, state_path=None):
-    """Returns {tweak_id: [item names apply() would change]} for aggregate tweaks not yet applied."""
+def preview_tweak_items(tweak_ids):
+    """Returns {tweak_id: [item names apply() would change]} for aggregate tweaks, even if applied before."""
     preview = {}
     for tweak_id in tweak_ids:
         tweak = tweaks_catalog.get_tweak(tweak_id)
         if not tweak.previews_items:
             continue
         try:
-            if state_store.get_applied(tweak_id, path=state_path) is None:
-                preview[tweak_id] = [_item_label(item) for item in tweak.get_current_value()]
+            preview[tweak_id] = [_item_label(item) for item in tweak.get_current_value()]
         except TweakError as exc:
             log.warning("prévia de '%s' indisponível: %s", tweak_id, exc)
     return preview
 
 
-def apply_level_tweaks(level_id, state_path=None, on_event=None):
+def apply_level_tweaks(level_id, state_path=None, on_event=None, machine=None):
     """Applies every applicable tweak in the level, collecting (id, status, note) per tweak.
 
     status is True (applied), "already" (already applied earlier — not a failure),
-    False (failed), or None (skipped — requires admin).
+    False (failed), or None (skipped — requires admin or doesn't suit this machine).
 
     on_event(tweak_id, status, note), if given, is called live: "running" before each tweak,
     then its final status (same values as above), then one "item" event per individual item an
@@ -127,7 +163,7 @@ def apply_level_tweaks(level_id, state_path=None, on_event=None):
         if on_event:
             on_event(tweak_id, status, note)
 
-    applicable, skipped = resolve_tweak_plan(level_id)
+    applicable, skipped = resolve_tweak_plan(level_id, machine)
     results = []
     for tweak_id in applicable:
         log.info("ajuste '%s': aplicando", tweak_id)
@@ -163,4 +199,8 @@ def apply_level_tweaks(level_id, state_path=None, on_event=None):
         results.append((tweak_id, None, "requer administrador"))
         log.warning("ajuste '%s': pulado (requer administrador)", tweak_id)
         emit(tweak_id, None, "requer administrador")
+    for tweak_id, reason in machine_skips(LEVELS[level_id]["tweak_ids"], machine).items():
+        results.append((tweak_id, None, reason))
+        log.info("ajuste '%s': pulado (%s)", tweak_id, reason)
+        emit(tweak_id, None, reason)
     return results
