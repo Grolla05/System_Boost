@@ -1,11 +1,35 @@
 # Changes
 
+## Undo confiável
+
+- `state_store.py`: arquivo danificado gera `StateCorruptError`, fica copiado em `.corrupt-*` e bloqueia escrita; cada save mantém `.bak`.
+- `manager.py`: registro `pending` é gravado antes de `apply()`; queda mantém o ajuste listado para undo.
+- `TweakPartialUndo`: tweaks agregados reportam o que não voltou, e só isso fica no estado.
+- `undo_all` e `apply_level_tweaks` sobrevivem a erros inesperados por ajuste.
+
+## Filtro de terceiros ampliado com prévia
+
+- `third_party.py`: lista única para startup, serviços e tarefas. Volta a proteger VPN e soma bancos, EDR/antivírus, backup, licenciamento e updaters. `ANYWHERE_NAMES` casa `vpn`, `update` e `trendmicro` dentro da palavra. Reverte a decisão anterior de remover VPN e de manter serviços/tarefas com a lista menor.
+- `profiles.preview_tweak_items()`: briefing lista cada item antes de agir (até 30).
+
+## Consentimento e ponto de restauração
+
+- `level_menu.py`: ESC/Q retorna `EXIT_CHOICE` e sai sem executar.
+- `main.py`: só `--dry-run` pode omitir o subcomando; `clean` pede confirmação (Prefetch avisado ali, visível); drivers exigem `--drivers` ou sim na pergunta, e `-y` sozinho não instala.
+- `backend/restore_point.py`: `Checkpoint-Computer` antes de stage e `clean`; falha vira aviso no mission log.
+
 ## Execução e instalação
 
 - `backend/_system.py`: `system_exe()`/`powershell_exe()` resolvem ferramentas do Windows por caminho absoluto, usados em tweaks, PowerShell e tela.
 - `drivers.py` reutiliza `run_powershell`.
 - `installer.iss`: `PrivilegesRequired=admin`, `{autopf}` e remoção da instalação antiga.
 - Logs do exe em `%LOCALAPPDATA%\\WinCleaner\\logs`.
+
+## Limpeza mais estrita
+
+- `backend/cleaner.py`: remoção não percorre links; `is_safe_clean_root()` recusa raízes sensíveis; `CLEAN_RULES` define idade mínima de 24 h em User/System Temp e preserva caches de modelos em `~/.cache`.
+- npm e uv: cache limpo pela pasta, sem executar a ferramenta. Isso também corrige `npm` nunca encontrado no Windows.
+- `disk_breakdown.py` reutiliza `get_dir_size`.
 
 ## Lixeira esvaziada já no Stage 1
 
