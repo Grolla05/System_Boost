@@ -4,7 +4,7 @@ import sys
 from backend.privileges import is_admin
 from backend.tweaks.catalog import get_tweak
 from backend.cleaner import (
-    ADMIN_ONLY_PATHS, COMMAND_CLEANUPS, get_temp_paths, clean_directory, format_size, run_command_cleanup,
+    ADMIN_ONLY_PATHS, CLEAN_RULES, COMMAND_CLEANUPS, get_temp_paths, clean_directory, format_size, run_command_cleanup,
 )
 from backend.tweaks import list_status, list_applied, apply_tweak, undo_tweak, undo_all, TweakError
 from backend import profiles
@@ -132,7 +132,7 @@ def _clean_with_log(mlog, paths, dry_run=False, commands=()):
         key = f"clean:{name}"
         mlog.start(key, f"{'Analisando' if dry_run else 'Limpando'} {name}")
         try:
-            freed = clean_directory(path, lambda n: None, dry_run=dry_run)
+            freed = clean_directory(path, lambda n: None, dry_run=dry_run, **CLEAN_RULES.get(name, {}))
         except Exception as exc:
             log.exception("limpeza '%s': erro inesperado", name)
             mlog.finish(key, "fail", str(exc))

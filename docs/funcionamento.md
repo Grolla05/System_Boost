@@ -60,6 +60,8 @@ Contém as regras de negócio para análise e exclusão física de arquivos e di
 *   `clean_directory(directory_path, progress_callback)`: Executa a exclusão de arquivos e subdiretórios com segurança:
     *   Arquivos abertos ou bloqueados pelo sistema/outros programas geram `PermissionError` e são **pulados silenciosamente** sem travar o aplicativo.
     *   Dispara um callback em tempo real para atualizar o progresso visual na interface.
+    *   Links não são percorridos. Raízes sensíveis são recusadas (`is_safe_clean_root`). `CLEAN_RULES` mantém arquivos com menos de 24 h em User/System Temp e caches de modelos em `~/.cache`.
+*   npm e uv: a pasta de cache é limpa diretamente, sem executar a ferramenta.
 
 #### 📄 `backend/hardware.py`
 Coleta a "ficha da máquina" (comando `info`). Backend puro, sem UI, **nunca levanta exceção**: cada campo que falhar fica `None` (ou `[]` para GPUs) e a tela mostra "desconhecido". Não exige Administrador.

@@ -1,5 +1,11 @@
 # Changes
 
+## Limpeza mais estrita
+
+- `backend/cleaner.py`: remoção não percorre links; `is_safe_clean_root()` recusa raízes sensíveis; `CLEAN_RULES` define idade mínima de 24 h em User/System Temp e preserva caches de modelos em `~/.cache`.
+- npm e uv: cache limpo pela pasta, sem executar a ferramenta. Isso também corrige `npm` nunca encontrado no Windows.
+- `disk_breakdown.py` reutiliza `get_dir_size`.
+
 ## Lixeira esvaziada já no Stage 1
 
 - `backend/profiles.py`: `recycle-bin` passa de Mediana para Leve (Stage 2+ herdam). Ordem em Mediana: Lixeira, npm, uv.
