@@ -1,3 +1,6 @@
+import pytest
+
+from backend.tweaks.base import TweakPartialUndo
 import json
 
 from backend.tweaks import startup_apps
@@ -99,7 +102,10 @@ def test_undo_failure_does_not_abort_others(monkeypatch):
 
     monkeypatch.setattr(startup_apps, "write_approved", fake_write)
 
-    StartupAppsTweak().undo([_entry("hkcu_run", "A"), _entry("hkcu_run", "B")])
+    with pytest.raises(TweakPartialUndo) as exc_info:
+        StartupAppsTweak().undo([_entry("hkcu_run", "A"), _entry("hkcu_run", "B")])
+
+    assert len(exc_info.value.remaining) == 1
 
     assert writes == ["B"]
 

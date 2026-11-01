@@ -130,6 +130,12 @@ def apply_level_tweaks(level_id, state_path=None, on_event=None):
             log.error("ajuste '%s': FALHOU: %s", tweak_id, exc)
             emit(tweak_id, False, str(exc))
             continue
+        except Exception as exc:
+            note = f"erro inesperado: {exc}"
+            results.append((tweak_id, False, note))
+            log.exception("ajuste '%s': erro inesperado", tweak_id)
+            emit(tweak_id, False, note)
+            continue
         if isinstance(applied_value, list):
             summary = f"{len(applied_value)} item(ns)" if applied_value else "nenhum item de terceiros"
             emit(tweak_id, True, summary)

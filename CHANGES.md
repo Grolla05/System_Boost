@@ -1,5 +1,12 @@
 # Changes
 
+## Undo confiável
+
+- `state_store.py`: arquivo danificado gera `StateCorruptError`, fica copiado em `.corrupt-*` e bloqueia escrita; cada save mantém `.bak`.
+- `manager.py`: registro `pending` é gravado antes de `apply()`; queda mantém o ajuste listado para undo.
+- `TweakPartialUndo`: tweaks agregados reportam o que não voltou, e só isso fica no estado.
+- `undo_all` e `apply_level_tweaks` sobrevivem a erros inesperados por ajuste.
+
 ## Lixeira esvaziada já no Stage 1
 
 - `backend/profiles.py`: `recycle-bin` passa de Mediana para Leve (Stage 2+ herdam). Ordem em Mediana: Lixeira, npm, uv.

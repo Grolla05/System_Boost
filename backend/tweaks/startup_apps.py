@@ -15,7 +15,7 @@ from backend.logger import get_logger
 from backend.privileges import is_admin
 
 from . import third_party
-from .base import Tweak
+from .base import Tweak, TweakPartialUndo
 
 log = get_logger("tweaks.startup_apps")
 
@@ -181,10 +181,14 @@ class StartupAppsTweak(Tweak):
 
     def undo(self, previous_value):
         """Restores each entry's original StartupApproved bytes (or removes the record)."""
+        failed = []
         for item in previous_value or []:
             data = bytes.fromhex(item["previous"]) if item.get("previous") else None
             try:
                 write_approved(item["scope"], item["name"], data)
             except OSError as exc:
                 log.warning("startup '%s' (%s): não foi possível restaurar: %s", item["name"], item["scope"], exc)
+                failed.append(item)
+        if failed:
+            raise TweakPartialUndo(failed)
         return previous_value

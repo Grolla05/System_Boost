@@ -321,3 +321,23 @@ def test_visual_effects_only_from_alta_onwards():
     assert "visual_effects" not in profiles.LEVELS["mediana"]["tweak_ids"]
     assert "visual_effects" in profiles.LEVELS["alta"]["tweak_ids"]
     assert "visual_effects" in profiles.LEVELS["extrema"]["tweak_ids"]
+
+
+def test_unexpected_error_does_not_stop_the_level(monkeypatch):
+    calls = []
+
+    def fake_apply(tweak_id, state_path=None):
+        calls.append(tweak_id)
+        if len(calls) == 1:
+            raise ValueError("inesperado")
+        return None
+
+    monkeypatch.setattr(profiles.tweaks_manager, "apply_tweak", fake_apply)
+    monkeypatch.setattr(profiles, "is_admin", lambda: True)
+
+    results = profiles.apply_level_tweaks("leve")
+
+    assert len(calls) == 3
+    assert results[0][1] is False
+    assert "inesperado" in results[0][2]
+    assert all(r[1] is True for r in results[1:])

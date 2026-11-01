@@ -1,4 +1,7 @@
+import pytest
+
 from backend.tweaks import state_store
+from backend.tweaks.base import TweakError
 
 
 def test_load_state_on_missing_file_returns_empty_structure(tmp_path):
@@ -56,3 +59,43 @@ def test_list_applied_sorted_most_recent_first(tmp_path):
     records = state_store.list_applied(path=path)
 
     assert [r["tweak_id"] for r in records] == ["hibernation", "power_plan"]
+
+
+@pytest.mark.parametrize("content", ['{"tweaks": {"a"', "[]", '{"tweaks": []}', b"\xff\xfe"])
+def test_damaged_state_is_kept_and_blocks_writes(tmp_path, content):
+    path = tmp_path / "state.json"
+    raw = content if isinstance(content, bytes) else content.encode()
+    path.write_bytes(raw)
+
+    with pytest.raises(state_store.StateCorruptError):
+        state_store.load_state(path)
+    with pytest.raises(state_store.StateCorruptError):
+        state_store.save_applied("b", 1, 0, False, path=path)
+
+    assert path.read_bytes() == raw
+    assert [p.read_bytes() for p in tmp_path.glob("state.corrupt-*.json")] == [raw]
+
+
+def test_state_corrupt_error_is_a_tweak_error():
+    assert issubclass(state_store.StateCorruptError, TweakError)
+
+
+def test_save_keeps_previous_version_as_bak(tmp_path):
+    path = tmp_path / "state.json"
+    state_store.save_applied("a", 1, 0, False, path=path)
+    first = path.read_bytes()
+
+    state_store.save_applied("b", 1, 0, False, path=path)
+
+    assert (tmp_path / "state.json.bak").read_bytes() == first
+
+
+def test_update_previous_keeps_the_rest_of_the_record(tmp_path):
+    path = tmp_path / "state.json"
+    state_store.save_applied("a", ["x", "y"], ["x", "y"], True, path=path)
+
+    state_store.update_previous("a", ["y"], path=path)
+
+    record = state_store.get_applied("a", path=path)
+    assert record["previous_value"] == ["y"]
+    assert record["applied_value"] == ["x", "y"]

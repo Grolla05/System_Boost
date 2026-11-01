@@ -212,6 +212,8 @@ Arquivo JSON em `%LOCALAPPDATA%\WinCleaner\tweaks_state.json`, escrita atômica 
 }
 ```
 
+Um registro nasce com `status: "pending"` antes de `apply()` e vira `applied` depois, então uma queda no meio ainda permite desfazer. Arquivo danificado nunca é sobrescrito (`StateCorruptError`, cópia `.corrupt-*`), e cada gravação mantém `.bak`. Se um undo agregado falha em parte, `TweakPartialUndo` mantém no estado só os itens restantes.
+
 `previous_value: null` é um valor significativo (a chave/valor não existia antes) — `undo()` **apaga** o valor do registro em vez de escrever `null`. Reaplicar um ajuste já aplicado (sem desfazer antes) é **rejeitado**, nunca sobrescrito — sobrescrever destruiria o valor original verdadeiro. `_seq` é um contador interno usado para ordenar `boost undo --all` do mais recente para o mais antigo, independente de resolução do relógio do sistema.
 
 ### Fluxo de `apply` / `undo` (`backend/tweaks/manager.py`)
